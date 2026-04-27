@@ -1,0 +1,3360 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人面談スケジューラー</title>
+    <style>
+      :root {
+        --primary: #2563eb;
+        --primary-light: #eff6ff;
+        --primary-dark: #1d4ed8;
+        --success: #16a34a;
+        --danger: #dc2626;
+        --warning: #d97706;
+        --warning-light: #fffbeb;
+        --text: #1e293b;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+        --bg: #f8fafc;
+        --white: #ffffff;
+        --radius: 10px;
+        --shadow: 0 2px 8px rgba(0,0,0,0.08);
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .app-header { text-align: center; margin-bottom: 28px; }
+      .app-title  { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+      .app-subtitle { font-size: 0.875rem; color: var(--text-muted); margin-top: 4px; }
+
+      /* ステップ */
+      .steps { display: flex; justify-content: center; align-items: flex-start; gap: 0; margin-bottom: 28px; }
+      .step  { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--text-muted); }
+      .step-num {
+        font-size: 1.4rem;
+        line-height: 1;
+      }
+      .step.active .step-num  { outline: 2px solid #e07b00; border-radius: 6px; padding: 1px 3px; }
+      .step.active .step-label { color: #e07b00; font-weight: 600; }
+      .step-line { width: 32px; height: 2px; background: var(--border); margin: 0.7rem 4px 0; }
+
+      /* カード */
+      .card {
+        background: var(--white); border-radius: var(--radius);
+        padding: 24px; margin-bottom: 16px;
+        box-shadow: var(--shadow); border: 1px solid var(--border);
+      }
+      .card-title {
+        font-size: 1rem; font-weight: 700; color: var(--text);
+        margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+      }
+      .card-title .icon { font-size: 1.2rem; }
+
+      /* カレンダー */
+      .calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .calendar-month-label { font-size: 1rem; font-weight: 700; }
+      .nav-btn {
+        background: none; border: 1px solid var(--border); border-radius: 6px;
+        width: 32px; height: 32px; cursor: pointer; font-size: 1rem; color: var(--text); transition: background 0.15s;
+      }
+      .nav-btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+
+      .calendar-weekdays {
+        display: grid; grid-template-columns: repeat(7, 1fr);
+        text-align: center; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;
+      }
+      .weekday-label:first-child { color: #dc2626; }
+      .weekday-label:last-child  { color: #2563eb; }
+
+      .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+      .cal-day {
+        aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+        border-radius: 6px; font-size: 0.875rem; cursor: pointer;
+        border: 2px solid transparent; transition: all 0.15s;
+      }
+      .cal-day.past    { background: #f1f5f9; color: #94a3b8; cursor: default; border-radius: 6px; }
+      .cal-day.today   { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+      .cal-day.selected { background: var(--primary); color: var(--white); font-weight: 700; border-color: var(--primary); }
+      .cal-day:not(.past):not(.empty):hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+      .cal-day.empty   { cursor: default; }
+      .selected-count  { text-align: right; font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-top: 10px; }
+
+      /* 1コマ時間 */
+      .slot-options { display: flex; gap: 12px; }
+      .slot-option  { flex: 1; position: relative; }
+      .slot-option input[type="radio"] { position: absolute; opacity: 0; width: 0; }
+      .slot-label {
+        display: block; padding: 14px; border: 2px solid var(--border);
+        border-radius: var(--radius); text-align: center; cursor: pointer; transition: all 0.15s;
+      }
+      .slot-label .minutes { font-size: 1.5rem; font-weight: 700; color: var(--text-muted); display: block; }
+      .slot-label .unit    { font-size: 0.75rem; color: var(--text-muted); }
+      .slot-option input:checked + .slot-label { border-color: var(--primary); background: var(--primary-light); }
+      .slot-option input:checked + .slot-label .minutes { color: var(--primary); }
+
+      /* 時刻設定 */
+      .date-settings-list { display: flex; flex-direction: column; gap: 12px; }
+      .no-dates-msg { text-align: center; color: var(--text-muted); font-size: 0.875rem; padding: 20px; }
+      .date-row {
+        display: flex; align-items: center; gap: 12px; padding: 12px;
+        border: 1px solid var(--border); border-radius: 8px; background: var(--bg); flex-wrap: wrap;
+      }
+      .date-label  { font-weight: 600; font-size: 0.875rem; min-width: 100px; flex-shrink: 0; }
+      .time-setting { display: flex; align-items: center; gap: 8px; flex: 1; }
+      select {
+        padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 0.875rem; background: var(--white); color: var(--text); cursor: pointer;
+      }
+      select:focus { outline: none; border-color: var(--primary); }
+      .time-separator { color: var(--text-muted); font-weight: 600; }
+      .btn-remove-date {
+        background: none; border: none; color: var(--danger); cursor: pointer;
+        font-size: 1.1rem; padding: 4px; margin-left: auto; opacity: 0.6; transition: opacity 0.15s;
+      }
+      .btn-remove-date:hover { opacity: 1; }
+
+      /* 注意ボックス */
+      .warning-box {
+        background: var(--warning-light);
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 0.875rem;
+        color: var(--warning);
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin-top: 16px;
+      }
+      .warning-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+      /* ボタン */
+      .btn {
+        padding: 12px 24px; border: none; border-radius: 8px;
+        font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
+      }
+      .btn-primary { background: var(--primary); color: var(--white); width: 100%; }
+      .btn-primary:hover { background: var(--primary-dark); }
+      .btn-primary:disabled { background: var(--primary); color: white; opacity: 0.75; cursor: not-allowed; }
+      .btn-secondary { background: var(--white); color: var(--text); border: 1px solid var(--border); }
+      .btn-secondary:hover { background: var(--bg); }
+      .btn-success { background: var(--success); color: var(--white); }
+      .btn-success:hover { background: #15803d; }
+      .btn-success:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+
+      /* ローディングスピナー（幾何学的モーフィング） */
+      .btn-loading { display: inline-flex; align-items: center; gap: 8px; }
+      .spinner {
+        width: 16px; height: 16px;
+        background: #f97316;
+        flex-shrink: 0;
+        animation: morph 1.6s ease-in-out infinite;
+      }
+      @keyframes morph {
+        0%, 100% { border-radius: 20%; transform: rotate(0deg)   scale(1);    opacity: 1;   }
+        25%       { border-radius: 50%; transform: rotate(90deg)  scale(0.85); opacity: 0.8; }
+        50%       { border-radius: 5%;  transform: rotate(180deg) scale(1.1);  opacity: 1;   }
+        75%       { border-radius: 50%; transform: rotate(270deg) scale(0.85); opacity: 0.8; }
+      }
+
+      /* 完了画面 */
+      .complete-screen { display: none; }
+      .complete-screen.show { display: block; }
+      .complete-title {
+        font-size: 1.2rem; font-weight: 700;
+        color: var(--success); margin-bottom: 20px;
+        text-align: center;
+      }
+      .url-block {
+        padding: 14px; border-radius: 8px; margin-bottom: 12px;
+      }
+      .url-block.primary  { background: #f0fdf4; border: 1px solid #86efac; }
+      .url-block.secondary { background: #eff6ff; border: 1px solid #bfdbfe; }
+      .url-block-title { font-size: 0.875rem; font-weight: 700; margin-bottom: 4px; }
+      .url-block.primary .url-block-title { color: var(--success); }
+      .url-block.secondary .url-block-title { color: var(--primary); }
+      .url-block-note { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
+      .url-row { display: flex; gap: 8px; align-items: center; }
+      .url-input {
+        flex: 1; padding: 7px 10px; border: 1px solid var(--border);
+        border-radius: 6px; font-size: 0.8rem; background: var(--white);
+        color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .btn-copy-green {
+        padding: 7px 12px; background: var(--success); color: var(--white);
+        border: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+        cursor: pointer; white-space: nowrap;
+      }
+      .btn-copy-green:hover { background: #15803d; }
+      .btn-open-blue {
+        padding: 7px 12px; background: var(--primary); color: var(--white);
+        border: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+        cursor: pointer; white-space: nowrap;
+      }
+      .btn-open-blue:hover { background: var(--primary-dark); }
+
+      /* URLポップアップ */
+      .url-popup-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.5); z-index: 100;
+        align-items: center; justify-content: center; padding: 20px;
+      }
+      .url-popup-overlay.show { display: flex; }
+      .url-popup {
+        background: var(--white); border-radius: var(--radius); padding: 24px;
+        max-width: 440px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      }
+      .url-popup-title { font-size: 1rem; font-weight: 700; margin-bottom: 16px; }
+      .url-popup-warning {
+        font-size: 0.8rem; color: var(--warning);
+        background: var(--warning-light); border: 1px solid #fcd34d;
+        border-radius: 6px; padding: 8px 12px; margin-top: 12px;
+      }
+
+      /* やり直しボタン */
+      .btn-reset {
+        width: 100%; margin-top: 8px;
+        padding: 10px 24px; border: 1px solid var(--danger);
+        border-radius: 8px; font-size: 0.875rem; font-weight: 600;
+        cursor: pointer; background: var(--white); color: var(--danger);
+        transition: all 0.15s;
+      }
+      .btn-reset:hover { background: #fef2f2; }
+
+      /* 危険ボタン */
+      .btn-danger { background: var(--danger); color: var(--white); }
+      .btn-danger:hover { background: #b91c1c; }
+
+      /* モーダル */
+      .modal-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.5); z-index: 100;
+        align-items: center; justify-content: center; padding: 20px;
+      }
+      .modal-overlay.show { display: flex; }
+      .modal {
+        background: var(--white); border-radius: var(--radius); padding: 28px;
+        max-width: 480px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      }
+      .modal-title  { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
+      .modal-text { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; }
+      .confirm-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+      .confirm-item {
+        display: flex; gap: 12px; padding: 10px 14px;
+        border-bottom: 1px solid var(--border); font-size: 0.875rem;
+      }
+      .confirm-item:last-child { border-bottom: none; }
+      .confirm-key  { color: var(--text-muted); min-width: 80px; flex-shrink: 0; }
+      .confirm-val  { font-weight: 600; }
+      .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+      .modal-actions .btn { flex: 1; }
+
+      /* ============================================================
+        フィルタータブ
+        ※ 画面2：「全員/要確認/兄弟姉妹/面談なし」
+      ============================================================ */
+      .filter-tabs {
+        display: flex;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 12px;
+        width: 100%;
+      }
+      .filter-tab {
+        flex: 1; padding: 9px 0;
+        border: none; border-right: 1px solid var(--border);
+        background: var(--white);
+        font-size: 0.8rem; cursor: pointer; transition: all 0.15s;
+        color: var(--text-muted); text-align: center;
+      }
+      .filter-tab:last-child { border-right: none; }
+      .filter-tab.active {
+        background: var(--primary); color: var(--white); font-weight: 600;
+      }
+      .filter-tab:hover:not(.active) { background: var(--primary-light); color: var(--primary); }
+
+      /* ============================================================
+        状態バッジ
+      ============================================================ */
+      .badge {
+        display: inline-block; padding: 2px 8px;
+        border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+      }
+      .badge-answered   { background: #f0fdf4; color: var(--success); border: 1px solid #86efac; }
+      .badge-unanswered { background: var(--warning-light); color: var(--warning); border: 1px solid #fcd34d; }
+      .badge-flagged    { background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; }
+
+      /* ============================================================
+          対応プルダウン列のハイライト
+      ============================================================ */
+      .treatment-cell {
+        background: #f0f9ff;
+        padding: 4px 6px;
+      }
+      .treatment-select {
+        font-size: 0.78rem;
+        padding: 4px 6px;
+        border: 1px solid #93c5fd;
+        border-radius: 6px;
+        background: var(--white);
+        color: var(--text);
+        cursor: pointer;
+        width: 100%;
+        min-width: 90px;
+      }
+      .treatment-select:focus { outline: none; border-color: var(--primary); }
+
+      /* 対応プルダウンの値による色分け */
+      .treatment-select[data-value="auto"]   { border-color: #86efac; background: #f0fdf4; }
+      .treatment-select[data-value="manual"] { border-color: #93c5fd; background: #eff6ff; }
+      .treatment-select[data-value="none"]   { border-color: #d1d5db; background: #f9fafb; color: var(--text-muted); }
+
+      /* トースト */
+      .toast {
+        position: fixed; bottom: 24px; left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--text); color: var(--white);
+        padding: 12px 24px; border-radius: 999px;
+        font-size: 0.875rem; font-weight: 600;
+        z-index: 200; transition: transform 0.3s ease; pointer-events: none;
+      }
+      .toast.show    { transform: translateX(-50%) translateY(0); }
+      .toast.success { background: var(--success); }
+      .toast.error   { background: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <!-- 画面1 -->
+    <div id="screen1">
+
+      <header class="app-header">
+        <span style="font-size:2.5rem; vertical-align:middle; margin-right:8px;">🐔</span>
+        
+        <div style="display:inline-block; vertical-align:middle;">
+          <span style="font-size:1.5rem; font-weight:500; color:var(--text);">
+            <span style="color:#e07b00;">めんどり</span>さん
+          </span>
+          <div style="font-size:0.82rem; color:#777; margin-top:2px;">
+            個人面談スケジューリングアプリ
+          </div>
+        </div>
+      </header>
+      <div class="steps">
+        <div class="step active">
+          <div class="step-num">🥚</div>
+          <div class="step-label">① 設定</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐣</div>
+          <div class="step-label">② データ確認</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐤</div>
+          <div class="step-label">③ スケジューリング</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐔</div>
+          <div class="step-label">④ 結果・出力</div>
+        </div>
+      </div>
+
+      <!-- フォーム作成済みバナー -->
+      <div id="formCreatedBanner" style="display:none; margin-bottom:16px;">
+        <div style="
+          background:#f0fdf4; border:1px solid #86efac; border-radius:10px;
+          padding:16px 20px; display:flex; align-items:center; justify-content:space-between;
+          flex-wrap:wrap; gap:12px;
+        ">
+          <div>
+            <div style="font-weight:700; color:var(--success); margin-bottom:4px;">
+              ✅ Googleフォームは作成済みです
+            </div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">
+              回答データの確認・スケジューリングはステップ２から始めてください。
+            </div>
+          </div>
+          <button class="btn btn-primary" id="goToScreen2FromBanner"
+            style="width:auto; padding:10px 20px; white-space:nowrap;">
+            📋 ステップ２へ進む
+          </button>
+        </div>
+      </div>
+
+      <!-- 名簿シート確認カード -->
+      <div class="card" id="rosterInfoCard">
+        <div class="card-title">
+          <span class="icon">📋</span>
+          名簿シートの確認
+        </div>
+        <div id="rosterInfoStatus" style="
+          padding: 12px 16px;
+          border-radius: 8px;
+          font-size: 0.875rem;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          color: var(--text-muted);
+        ">
+          名簿シートを確認中...
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; line-height: 1.6;">
+          ※ スプレッドシートの「名簿」シートに、学年・組・番号・姓・名の列を含むデータを貼り付けてください。
+        </div>
+      </div>
+
+      <!-- カレンダーで面談日を選ぶ -->
+      <div class="card">
+        <div class="card-title">
+          <span class="icon">📆</span>
+          面談日を選んでください（複数選択OK）
+        </div>
+        <div class="calendar-header">
+          <button class="nav-btn" id="prevMonth">‹</button>
+          <div class="calendar-month-label" id="monthLabel"></div>
+          <button class="nav-btn" id="nextMonth">›</button>
+        </div>
+        <div class="calendar-weekdays">
+          <div class="weekday-label">日</div>
+          <div class="weekday-label">月</div>
+          <div class="weekday-label">火</div>
+          <div class="weekday-label">水</div>
+          <div class="weekday-label">木</div>
+          <div class="weekday-label">金</div>
+          <div class="weekday-label">土</div>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div class="selected-count" id="selectedCount">0日選択中</div>
+      </div>
+
+      <!-- 1コマの時間 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="icon">⏱️</span>
+          1コマの時間（全日程共通）
+        </div>
+        <div class="slot-options">
+          <div class="slot-option">
+            <input type="radio" name="slotDuration" id="slot10" value="10" disabled>
+            <label class="slot-label" for="slot10" style="opacity:0.4; cursor:not-allowed;">
+              <span class="minutes">10</span>
+              <span class="unit">分</span>
+            </label>
+          </div>
+          <div class="slot-option">
+            <input type="radio" name="slotDuration" id="slot15" value="15" checked>
+            <label class="slot-label" for="slot15">
+              <span class="minutes">15</span>
+              <span class="unit">分</span>
+            </label>
+          </div>
+          <div class="slot-option">
+            <input type="radio" name="slotDuration" id="slot20" value="20" disabled>
+            <label class="slot-label" for="slot20" style="opacity:0.4; cursor:not-allowed;">
+              <span class="minutes">20</span>
+              <span class="unit">分</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 日付ごとの開始・終了時刻 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="icon">🕐</span>
+          各日の開始・終了時刻
+        </div>
+        <div class="date-settings-list" id="dateSettingsList">
+          <div class="no-dates-msg">
+            上のカレンダーで面談日を選ぶと、<br>ここに時刻設定が表示されます
+          </div>
+        </div>
+      </div>
+
+      <!-- 確認ボタン -->
+      <button class="btn btn-primary" id="confirmBtn" disabled>
+        設定を確認する →
+      </button>
+
+      <!-- 確認モーダル -->
+      <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+          <div class="modal-title">📋 設定内容の確認</div>
+          <div class="confirm-list" id="confirmList"></div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" id="backBtn">← 戻る</button>
+            <button class="btn btn-success" id="saveBtn">✓ 確定して<br>Googleフォームを作成</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- やり直し確認モーダル -->
+      <div class="modal-overlay" id="resetModalOverlay">
+        <div class="modal">
+          <div class="modal-title">🔄 設定をやり直しますか？</div>
+          <p class="modal-text">
+            おおもとの回答データを読み込みなおし、画面１の設定をやりなおします。<br>
+            この画面で作業した入力処理はリセットされます。<br>
+            本当にやりなおしますか？
+          </p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" id="resetCancelBtn">← キャンセル</button>
+            <button class="btn btn-danger" id="resetConfirmBtn">やり直す</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- フォーム作成完了画面 -->
+      <div class="complete-screen" id="completeScreen">
+        <div class="card">
+          <div class="complete-title">✅ フォームが作成されました！</div>
+
+          <div class="url-block primary">
+            <div class="url-block-title">📋 「個人面談 希望日程アンケート」フォームURL</div>
+            <div class="url-block-note">このURLを保護者に送ってください</div>
+            <div class="url-row">
+              <input class="url-input" id="completePublishedUrl" type="text" readonly>
+              <button class="btn-copy-green" id="copyPublishedBtn">📋 コピー</button>
+            </div>
+          </div>
+
+          <div class="url-block secondary">
+            <div class="url-block-title">⚙️ フォーム管理URL</div>
+            <div class="url-block-note">設定確認・修正用です。保護者には送らないでください</div>
+            <div class="url-row">
+              <input class="url-input" id="completeEditUrl" type="text" readonly>
+              <button class="btn-open-blue" id="openCompleteEditBtn">🔗 開く</button>
+            </div>
+          </div>
+
+          <div class="warning-box" style="margin-top: 4px;">
+            <span class="warning-icon">⚠️</span>
+            <span>保護者にアンケートフォームURLを送付した後は、フォームの設問項目などを変更しないでください。</span>
+          </div>
+
+          <button class="btn btn-primary" id="goToScreen2Btn" style="margin-top: 28px;">
+            ステップ２「回答データ確認」へ進む →
+          </button>
+
+          <button class="btn btn-reset" id="resetBtn" style="margin-top: 8px;">
+            ステップ１に戻りフォームを作成しなおす
+          </button>
+          <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 6px;">
+            ⚠️ やり直す前に、Googleドライブの「個人面談 希望日程アンケート」フォームと、スプレッドシートの「フォームの回答」シートを手動で削除してください。
+          </p>
+        </div>
+      </div>
+    </div><!-- /screen1 -->
+
+    <!-- URLポップアップ（画面２から確認できる） -->
+    <div class="url-popup-overlay" id="urlPopupOverlay">
+      <div class="url-popup">
+        <div class="url-popup-title">📋 フォームURL確認</div>
+
+        <div class="url-block primary" style="margin-bottom: 10px;">
+          <div class="url-block-title">📋 「個人面談 希望日程アンケート」フォームURL</div>
+          <div class="url-block-note">このURLを保護者に送ってください</div>
+          <div class="url-row">
+            <input class="url-input" id="popupPublishedUrl" type="text" readonly>
+            <button class="btn-copy-green" id="copyPopupPublishedBtn">📋 コピー</button>
+          </div>
+        </div>
+
+        <div class="url-block secondary">
+          <div class="url-block-title">⚙️ フォーム管理URL</div>
+          <div class="url-block-note">設定確認・修正用・保護者には送らないでください</div>
+          <div class="url-row">
+            <input class="url-input" id="popupEditUrl" type="text" readonly>
+            <button class="btn-open-blue" id="openPopupEditBtn">🔗 開く</button>
+          </div>
+        </div>
+
+        <div class="url-popup-warning">
+          ⚠️ 保護者にアンケートフォームURLを送付した後は、フォームの設問項目などを変更しないでください。
+        </div>
+
+        <button class="btn btn-secondary" id="closeUrlPopupBtn" style="width:100%; margin-top: 14px;">
+          閉じる
+        </button>
+      </div>
+    </div>
+
+    <!-- ============================================================
+          画面2：回答データ確認
+    ============================================================ -->
+    <div class="screen2" id="screen2" style="display:none;">
+
+      <header class="app-header">
+        <span style="font-size:2.5rem; vertical-align:middle; margin-right:8px;">🐔</span>
+        
+        <div style="display:inline-block; vertical-align:middle;">
+          <span style="font-size:1.5rem; font-weight:500; color:var(--text);">
+            <span style="color:#e07b00;">めんどり</span>さん
+          </span>
+          <div style="font-size:0.82rem; color:#777; margin-top:2px;">
+            個人面談スケジューリングアプリ
+          </div>
+        </div>
+      </header>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">🥚</div>
+          <div class="step-label">① 設定</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step active">
+          <div class="step-num">🐣</div>
+          <div class="step-label">② データ確認</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐤</div>
+          <div class="step-label">③ スケジューリング</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐔</div>
+          <div class="step-label">④ 結果・出力</div>
+        </div>
+      </div>
+
+      <!-- フォームURL確認ボタン -->
+      <div style="text-align: right; margin-bottom: 12px;">
+        <button class="btn btn-secondary" id="showUrlPopupBtn"
+          style="width: auto; padding: 8px 16px; font-size: 0.8rem;">
+          📋 フォームURL確認
+        </button>
+      </div>
+
+      <!-- 対象範囲・人数設定 -->
+      <div class="card" id="rangeSettingCard">
+        <div class="card-title">
+          <span class="icon">🎯</span>
+          対象範囲の設定
+        </div>
+        <div style="font-size: 0.875rem; color: var(--text); margin-bottom: 16px;">
+          自動スケジューリングする対象範囲を設定してください。
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.875rem; cursor: pointer;">
+              <input type="radio" name="targetRange" value="all" checked>
+              全体（全学年・全クラス）
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.875rem; cursor: pointer;">
+              <input type="radio" name="targetRange" value="specific">
+              学年・クラスを指定（1クラスのみ）
+            </label>
+          </div>
+          <div id="specificRangeArea" style="display:none; margin-top: 10px;">
+            <select id="targetGradeSelect" style="margin-right: 8px;">
+              <option value="">学年を選択</option>
+            </select>
+            <select id="targetClassSelect">
+              <option value="">組を選択</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 名簿状態表示 -->
+        <div id="rosterStatus" style="
+          margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+          font-size: 0.8rem; background: var(--bg); border: 1px solid var(--border);
+        ">
+          名簿シートを確認中...
+        </div>
+
+        <!-- ============================================================
+              ※ 画面2改修：「紙・電話回答の追記案内」を読み込みボタンの前に追加
+        ============================================================ -->
+        <div style="
+          margin-top: 12px; padding: 10px 14px;
+          background: var(--primary-light); border: 1px solid #bfdbfe;
+          border-radius: 8px; font-size: 0.8rem; color: var(--primary); line-height: 1.7;
+        ">
+          💡 <strong>紙・電話で回答を受けた方がいる場合：</strong><br>
+          該当生徒の対応プルダウンを「手動指定」にして、ステップ３で希望日時を指定してください。
+        </div>
+
+        <!-- 前回データ復元ボタン（前回データがある時だけJS側で表示する） -->
+        <div id="resumeDataArea" style="display:none; margin-bottom: 10px;">
+          <div style="
+            margin-top: 12px; padding: 10px 14px;
+            background: #eff6ff; border: 1px solid #bfdbfe;
+            border-radius: 8px; font-size: 0.8rem;
+          ">
+            <div style="font-weight: 600; color: #1d4ed8; margin-bottom: 8px;">
+              🐣 前回の作業データがあります
+            </div>
+            <div style="color: #475569; margin-bottom: 10px; line-height: 1.6;">
+              対応プルダウンの設定・内部メモ・フラグが保存されています。
+            </div>
+            <button id="resumeDataBtn" class="btn btn-primary" style="width:100%; background:#1d4ed8;">
+              ↩️ 前回の続きから再開する
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="loadDataBtn" style="margin-top: 12px;">
+          フォームの回答データを読み込む →
+        </button>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; text-align: center;">
+          読み込み中は別の操作をしないでください。
+        </div>
+      </div>
+
+      <!-- 回答状況サマリー（データ読み込み後に表示） -->
+      <div class="card" id="summaryCard" style="display:none;">
+        <div class="card-title">
+          <span class="icon">📊</span>
+          回答状況
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+          <div style="background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid var(--border);">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">対象</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);" id="summaryTotal">-</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">名</div>
+          </div>
+          <div style="background: #f0fdf4; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #86efac;">
+            <div style="font-size: 0.75rem; color: var(--success); margin-bottom: 4px;">回答済</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);" id="summaryAnswered">-</div>
+            <div style="font-size: 0.75rem; color: var(--success);">名</div>
+          </div>
+          <div style="background: var(--warning-light); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #fcd34d;">
+            <div style="font-size: 0.75rem; color: var(--warning); margin-bottom: 4px;">未回答</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--warning);" id="summaryUnanswered">-</div>
+            <div style="font-size: 0.75rem; color: var(--warning);">名</div>
+          </div>
+          <div style="background: #eff6ff; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #bfdbfe;">
+            <div style="font-size: 0.75rem; color: var(--primary); margin-bottom: 4px;">要確認</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);" id="summaryFlagged">-</div>
+            <div style="font-size: 0.75rem; color: var(--primary);">件</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================
+            操作ガイド
+            ※ 画面2改修：タイトルを「この画面でやること」→「操作ガイド」に変更
+                        内容も新設計（対応プルダウン方式）に合わせて書き直し
+      ============================================================ -->
+      <div class="card" id="taskGuideCard" style="display:none;">
+        <div class="card-title">
+          <span class="icon">📖</span>
+          操作ガイド
+        </div>
+        <div style="font-size: 0.875rem; color: var(--text); line-height: 1.8;">
+          <p style="margin-bottom: 12px;">各生徒の<strong>「対応」列のプルダウン</strong>を確認・変更してから、ステップ３へ進んでください。</p>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+            <!-- 自動 -->
+            <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #f0fdf4; border-radius: 8px; border: 1px solid #86efac;">
+              <span style="font-weight: 700; color: var(--success); white-space: nowrap; min-width: 56px;">自動</span>
+              <span style="font-size: 0.8rem; color: var(--text);">自動スケジューリングに含めます。回答済みの方はデフォルトで「自動」に設定されています。</span>
+            </div>
+            <!-- 手動指定 -->
+            <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
+              <span style="font-weight: 700; color: var(--primary); white-space: nowrap; min-width: 56px;">手動指定</span>
+              <span style="font-size: 0.8rem; color: var(--text);">ステップ３で日時を手動で指定します。要確認の方はデフォルトで「手動指定」に設定されています。</span>
+            </div>
+            <!-- 面談なし -->
+            <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid var(--border);">
+              <span style="font-weight: 700; color: var(--text-muted); white-space: nowrap; min-width: 56px;">面談なし</span>
+              <span style="font-size: 0.8rem; color: var(--text);">スケジューリングから除外します。未回答の方はデフォルトで「面談なし」に設定されています。</span>
+            </div>
+          </div>
+
+          <div style="padding: 10px 12px; background: var(--warning-light); border-radius: 8px; font-size: 0.8rem; color: var(--warning); border: 1px solid #fcd34d;">
+            ⚠️ <strong>要確認タブを必ず確認してください。</strong>全コマNGの方や氏名入力ミスの疑いがある方が表示されます。
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================
+            回答一覧
+            ※ 画面2改修：テーブル列を変更、「未回答」タブを削除
+      ============================================================ -->
+      <div class="card" id="responseListCard" style="display:none;">
+        <div class="card-title">
+          <span class="icon">📋</span>
+          回答一覧
+        </div>
+
+        <!-- フィルタータブ：全員 / 要確認 / 兄弟姉妹 / 面談なし -->
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">全員</button>
+          <button class="filter-tab" data-filter="flagged">要確認</button>
+          <button class="filter-tab" data-filter="sibling">兄弟姉妹</button>
+          <button class="filter-tab" data-filter="none">面談なし</button>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table id="responseTable" style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border);">
+                <th style="text-align: left; padding: 6px 4px; color: var(--text-muted); font-weight: 600; white-space: nowrap;">番号</th>
+                <th style="text-align: left; padding: 6px 4px; color: var(--text-muted); font-weight: 600;">氏名</th>
+                <!-- ※ 画面2改修：対応プルダウンを左側に配置 -->
+                <th style="text-align: left; padding: 6px 4px; color: #2563eb; font-weight: 700; background: #f0f9ff;">対応</th>
+                <th style="text-align: left; padding: 6px 4px; color: var(--text-muted); font-weight: 600;">状態</th>
+                <th style="text-align: left; padding: 6px 4px; color: var(--text-muted); font-weight: 600;">兄弟姉妹</th>
+                <th style="text-align: left; padding: 6px 4px; color: var(--text-muted); font-weight: 600;">話題</th>
+                <!-- フラグ列：内部メモの左 -->
+                <th style="text-align: center; padding: 6px 4px; color: var(--text-muted); font-weight: 600;" title="確認フラグ">🚩</th>
+                <th style="text-align: left; padding: 6px 4px; color: var(--text-muted); font-weight: 600;">内部メモ</th>
+              </tr>
+            </thead>
+            <tbody id="responseTableBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- データ整備完了ボタン -->
+      <!-- ※ 画面2改修：常に有効（読み込み完了後）に変更 -->
+      <button class="btn btn-primary" id="completeScreen2Btn" style="display:none;">
+        データ整備完了 → ステップ３「ルール設定」へ進む
+      </button>
+
+    </div><!-- /screen2 -->
+
+    <!-- ============================================================
+          画面3：ルール設定・スケジューリング
+    ============================================================ -->
+    <div id="screen3" style="display:none;">
+
+      <header class="app-header">
+        <span style="font-size:2.5rem; vertical-align:middle; margin-right:8px;">🐔</span>
+        
+        <div style="display:inline-block; vertical-align:middle;">
+          <span style="font-size:1.5rem; font-weight:500; color:var(--text);">
+            <span style="color:#e07b00;">めんどり</span>さん
+          </span>
+          <div style="font-size:0.82rem; color:#777; margin-top:2px;">
+            個人面談スケジューリングアプリ
+          </div>
+        </div>
+      </header>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">🥚</div>
+          <div class="step-label">① 設定</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐣</div>
+          <div class="step-label">② データ確認</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step active">
+          <div class="step-num">🐤</div>
+          <div class="step-label">③ スケジューリング</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐔</div>
+          <div class="step-label">④ 結果・出力</div>
+        </div>
+      </div>
+
+      <!-- 画面2に戻るボタン -->
+      <div style="text-align: left; margin-bottom: 12px;">
+        <button id="backToScreen2Btn" class="btn btn-secondary"
+          style="width: auto; padding: 8px 16px; font-size: 0.8rem;">
+          ← ステップ２「データ確認」に戻る
+        </button>
+      </div>
+
+      <!-- パート①：手動指定の日時設定 -->
+      <div class="card" id="manualAssignCard">
+        <div class="card-title">
+          <span class="icon">✏️</span>
+          手動指定の日時を設定
+          <span id="manualCountBadge" style="
+            font-size: 0.75rem; font-weight: 600;
+            background: var(--primary-light); color: var(--primary);
+            border: 1px solid #bfdbfe; border-radius: 20px;
+            padding: 2px 10px; margin-left: 4px;
+          ">0名</span>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+          以下の方の面談日時を先生が直接指定してください。<br>
+          未選択のまま実行すると、自動スケジューリングに回されます。
+        </div>
+
+        <div id="manualEmptyMsg" style="
+          display: none; padding: 16px; text-align: center;
+          font-size: 0.875rem; color: var(--text-muted);
+          background: var(--bg); border-radius: 8px; border: 1px solid var(--border);
+        ">
+          手動指定の方はいません。このままステップ②へ進めてください。
+        </div>
+
+        <div id="manualAssignList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      </div>
+
+      <!-- パート②：おまかせスケジューリング -->
+      <div class="card">
+        <div class="card-title">
+          <span class="icon">⚡</span>
+          おまかせスケジューリング
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">
+          以下のルールで全クラスを一括実行します。
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px; margin-bottom: 20px;">
+          <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem;">
+            <span style="color: var(--success); font-size: 1rem; flex-shrink: 0;">✓</span>
+            <span><strong>手動指定を優先：</strong>手動指定した日時を最初に確保します</span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem;">
+            <span style="color: var(--success); font-size: 1rem; flex-shrink: 0;">✓</span>
+            <span><strong>兄弟姉妹調整：</strong>同じ日に自動調整します（できなかった場合は未割り当てリストに入れます）</span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem;">
+            <span style="color: var(--success); font-size: 1rem; flex-shrink: 0;">✓</span>
+            <span><strong>制約優先：</strong>都合の良いコマが少ない生徒から先に割り当てます</span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem;">
+            <span style="color: var(--success); font-size: 1rem; flex-shrink: 0;">✓</span>
+            <span><strong>バランス分散：</strong>特定の日に集中しないよう、各日程に均等に配置します</span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem;">
+            <span style="color: var(--success); font-size: 1rem; flex-shrink: 0;">✓</span>
+            <span><strong>調整時間：</strong>3コマ連続後に1コマ空けます（可能な場合のみ）</span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem;">
+            <span style="color: var(--success); font-size: 1rem; flex-shrink: 0;">✓</span>
+            <span><strong>全コマNG：</strong>スキップして未割り当てリストへ</span>
+          </div>
+        </div>
+
+        <!-- 重複警告エリア（重複があるときだけ表示） -->
+        <div id="duplicateWarning" style="
+          display: none; margin-bottom: 12px; padding: 10px 14px;
+          background: #fef2f2; border: 1px solid #fca5a5;
+          border-radius: 8px; font-size: 0.8rem; color: #991b1b;
+        ">
+          <div style="font-weight: 600; margin-bottom: 4px;">⚠️ 同じ日時が重複して選択されています</div>
+          <div id="duplicateDetail" style="line-height: 1.7; color: #b91c1c;"></div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: #991b1b;">修正してから実行してください。</div>
+        </div>
+
+        <button id="runScheduleBtn" class="btn" style="
+          width: 100%; padding: 14px;
+          background: var(--success); color: var(--white);
+          font-size: 1rem; font-weight: 700;
+          border-radius: 8px; border: none; cursor: pointer;
+          transition: background 0.15s;
+        ">
+          ▶ このルールでスケジューリングを実行する
+        </button>
+      </div>
+
+      <!-- 実行結果カード（実行後に表示） -->
+      <div class="card" id="scheduleResultCard" style="display:none;">
+        <div class="card-title">
+          <span class="icon">📊</span>
+          実行結果
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px;">
+          <div style="background: #f0fdf4; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #86efac;">
+            <div style="font-size: 0.75rem; color: var(--success); margin-bottom: 4px;">割り当て完了</div>
+            <div style="font-size: 1.8rem; font-weight: 700; color: var(--success);" id="resultAssigned">-</div>
+            <div style="font-size: 0.75rem; color: var(--success);">名</div>
+          </div>
+          <div style="background: var(--warning-light); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #fcd34d;">
+            <div style="font-size: 0.75rem; color: var(--warning); margin-bottom: 4px;">未割り当て</div>
+            <div style="font-size: 1.8rem; font-weight: 700; color: var(--warning);" id="resultUnassigned">-</div>
+            <div style="font-size: 0.75rem; color: var(--warning);">名</div>
+          </div>
+          <div style="background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid var(--border);">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">面談なし</div>
+            <div style="font-size: 1.8rem; font-weight: 700; color: var(--text-muted);" id="resultNone">-</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">名</div>
+          </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 0 0 14px;">
+
+        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">兄弟姉妹調整の結果</div>
+        <div id="siblingResultList" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;"></div>
+
+        <div id="unassignedSection" style="display:none;">
+          <hr style="border: none; border-top: 1px solid var(--border); margin: 0 0 14px;">
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">未割り当ての方</div>
+          <div id="unassignedList" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;"></div>
+        </div>
+
+        <button class="btn btn-primary" id="goToScreen4Btn">
+          結果を確認する → ステップ４「結果・修正」へ進む
+        </button>
+      </div>
+    </div><!-- /screen3 -->
+
+    <!-- ============================================================
+          画面4：結果確認・修正・出力
+    ============================================================ -->
+    <div id="screen4" style="display:none;">
+
+      <header class="app-header">
+        <span style="font-size:2.5rem; vertical-align:middle; margin-right:8px;">🐔</span>
+        
+        <div style="display:inline-block; vertical-align:middle;">
+          <span style="font-size:1.5rem; font-weight:500; color:var(--text);">
+            <span style="color:#e07b00;">めんどり</span>さん
+          </span>
+          <div style="font-size:0.82rem; color:#777; margin-top:2px;">
+            個人面談スケジューリングアプリ
+          </div>
+        </div>
+      </header>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">🥚</div>
+          <div class="step-label">① 設定</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐣</div>
+          <div class="step-label">② データ確認</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step">
+          <div class="step-num">🐤</div>
+          <div class="step-label">③ スケジューリング</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step active">
+          <div class="step-num">🐔</div>
+          <div class="step-label">④ 結果・出力</div>
+        </div>
+      </div>
+
+      <!-- 画面3に戻るボタン -->
+      <div style="text-align: left; margin-bottom: 12px;">
+        <button id="backToScreen3Btn" class="btn btn-secondary"
+          style="width: auto; padding: 8px 16px; font-size: 0.8rem;">
+          ← ステップ３「ルール設定」に戻る
+        </button>
+      </div>
+
+      <!-- ① クラス選択タブ -->
+      <div class="card" id="classTabCard">
+        <div class="card-title">
+          <span class="icon">🏫</span>
+          クラスを選択
+        </div>
+        <div id="classTabList" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+      </div>
+
+      <!-- ② カレンダーグリッド -->
+      <div class="card" id="calendarCard">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div class="card-title" style="margin-bottom: 0;">
+            <span class="icon">📅</span>
+            <span id="calendarTitle">面談スケジュール</span>
+            <span id="calendarStats" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400; margin-left: 8px;"></span>
+          </div>
+          <!-- 編集モード切り替えボタン -->
+          <button id="editModeBtn" style="
+            padding: 7px 14px; font-size: 0.8rem; font-weight: 600;
+            border-radius: 6px; border: 1px solid var(--border);
+            background: var(--white); color: var(--text); cursor: pointer;
+            transition: all 0.15s; white-space: nowrap;
+          ">✏️ 編集モード</button>
+        </div>
+
+        <!-- 編集モード中のヒント -->
+        <div id="editHint" style="display:none; margin-bottom: 10px; padding: 8px 12px;
+          background: var(--primary-light); border-radius: 8px; font-size: 0.8rem; color: var(--primary);">
+          編集モード中です。移動したい生徒のコマ（緑）をクリックしてください。
+        </div>
+        <!-- 移動モード中のヒント -->
+        <div id="moveHint" style="display:none; margin-bottom: 10px; padding: 8px 12px;
+          background: #eff6ff; border-radius: 8px; font-size: 0.8rem; color: var(--primary);
+          align-items: center; justify-content: space-between;">
+          <span>移動先の薄い青のコマをクリックしてください</span>
+          <button id="cancelMoveBtn" style="
+            font-size: 0.75rem; padding: 3px 10px; border: 1px solid var(--primary);
+            border-radius: 4px; background: var(--white); color: var(--primary); cursor: pointer;">
+            キャンセル
+          </button>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table id="resultCalendarGrid" style="width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 500px;">
+            <thead id="calendarHead"></thead>
+            <tbody id="calendarBody"></tbody>
+          </table>
+        </div>
+
+        <!-- カレンダー凡例 -->
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 0.75rem; color: var(--text-muted);">
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;background:#dcfce7;border:1px solid #86efac;border-radius:2px;display:inline-block;"></span>予約済み</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;background:#dbeafe;border:1px solid #93c5fd;border-radius:2px;display:inline-block;"></span>移動可能</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;background:#f1f5f9;border:1px solid var(--border);border-radius:2px;display:inline-block;"></span>面談不可</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;background:var(--white);border:1px solid var(--border);border-radius:2px;display:inline-block;"></span>空き</span>
+        </div>
+      </div>
+
+      <!-- ③ 未割り当て・面談なし -->
+      <div class="card" id="unassignedCard" style="display:none;">
+        <div class="card-title">
+          <span class="icon">⚠️</span>
+          未割り当て・面談なし
+        </div>
+
+        <!-- 未割り当てリスト -->
+        <div id="s4UnassignedSection" style="display:none; margin-bottom: 16px;">
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--warning); margin-bottom: 8px;">
+            未割り当て（空きコマをクリックして手動配置できます）
+          </div>
+          <div id="s4UnassignedList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
+        <!-- 面談なしリスト -->
+        <div id="s4NoneSection" style="display:none;">
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">面談なし</div>
+          <div id="s4NoneList" style="font-size: 0.8rem; color: var(--text-muted); line-height: 2;"></div>
+        </div>
+      </div>
+
+      <!-- ④ 出力・確定 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="icon">📤</span>
+          出力・確定
+        </div>
+        <!-- 画面2の対象範囲設定に連動して表示切り替え（JSで制御） -->
+        <div id="outputBtnArea"></div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; text-align: center;">
+          出力後はスプレッドシートに「出力_1年1組」などのシートが作成されます
+        </div>
+      </div>
+
+    </div><!-- /screen4 -->
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      // ============================================
+      //  状態管理
+      // ============================================
+      const state = {
+        viewYear:      new Date().getFullYear(),
+        viewMonth:     new Date().getMonth(),
+        selectedDates: new Set(),
+        timeSettings:  {},
+      };
+
+      // ============================================
+      //  要素の取得
+      // ============================================
+      const elements = {
+        resetBtn:             document.getElementById('resetBtn'),
+        resetModalOverlay:    document.getElementById('resetModalOverlay'),
+        resetCancelBtn:       document.getElementById('resetCancelBtn'),
+        resetConfirmBtn:      document.getElementById('resetConfirmBtn'),
+        completeScreen:       document.getElementById('completeScreen'),
+        completePublishedUrl: document.getElementById('completePublishedUrl'),
+        completeEditUrl:      document.getElementById('completeEditUrl'),
+        copyPublishedBtn:     document.getElementById('copyPublishedBtn'),
+        openCompleteEditBtn:  document.getElementById('openCompleteEditBtn'),
+        goToScreen2Btn:       document.getElementById('goToScreen2Btn'),
+        urlPopupOverlay:      document.getElementById('urlPopupOverlay'),
+        popupPublishedUrl:    document.getElementById('popupPublishedUrl'),
+        popupEditUrl:         document.getElementById('popupEditUrl'),
+        copyPopupPublishedBtn:document.getElementById('copyPopupPublishedBtn'),
+        openPopupEditBtn:     document.getElementById('openPopupEditBtn'),
+        closeUrlPopupBtn:     document.getElementById('closeUrlPopupBtn'),
+        monthLabel:           document.getElementById('monthLabel'),
+        calendarGrid:         document.getElementById('calendarGrid'),
+        selectedCount:        document.getElementById('selectedCount'),
+        dateSettingsList:     document.getElementById('dateSettingsList'),
+        confirmBtn:           document.getElementById('confirmBtn'),
+        modalOverlay:         document.getElementById('modalOverlay'),
+        confirmList:          document.getElementById('confirmList'),
+        backBtn:              document.getElementById('backBtn'),
+        saveBtn:              document.getElementById('saveBtn'),
+        toast:                document.getElementById('toast'),
+      };
+
+      // ============================================
+      //  カレンダー描画
+      // ============================================
+      function renderCalendar() {
+        const { viewYear, viewMonth, selectedDates } = state;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        elements.monthLabel.textContent = `${viewYear}年 ${viewMonth + 1}月`;
+
+        const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+        const lastDay        = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+        elements.calendarGrid.innerHTML = '';
+
+        for (let i = 0; i < firstDayOfWeek; i++) {
+          const empty = document.createElement('div');
+          empty.className = 'cal-day empty';
+          elements.calendarGrid.appendChild(empty);
+        }
+
+        for (let day = 1; day <= lastDay; day++) {
+          const date    = new Date(viewYear, viewMonth, day);
+          const dateStr = formatDate(date);
+          const cell    = document.createElement('div');
+          cell.className   = 'cal-day';
+          cell.textContent = day;
+
+          if (date < today) {
+            cell.classList.add('past');
+          } else {
+            if (date.toDateString() === today.toDateString()) cell.classList.add('today');
+            if (selectedDates.has(dateStr)) cell.classList.add('selected');
+            cell.addEventListener('click', () => toggleDate(dateStr));
+          }
+          elements.calendarGrid.appendChild(cell);
+        }
+      }
+
+      function toggleDate(dateStr) {
+        if (state.selectedDates.has(dateStr)) {
+          state.selectedDates.delete(dateStr);
+          delete state.timeSettings[dateStr];
+        } else {
+          state.selectedDates.add(dateStr);
+          state.timeSettings[dateStr] = { start: '13:00', end: '17:00' };
+        }
+        renderCalendar();
+        updateSelectedCount();
+        renderDateSettings();
+        updateConfirmButton();
+      }
+
+      function updateSelectedCount() {
+        elements.selectedCount.textContent = `${state.selectedDates.size}日選択中`;
+      }
+
+      function renderDateSettings() {
+        const list = elements.dateSettingsList;
+        if (state.selectedDates.size === 0) {
+          list.innerHTML = `<div class="no-dates-msg">上のカレンダーで面談日を選ぶと、<br>ここに時刻設定が表示されます</div>`;
+          return;
+        }
+        const sorted = [...state.selectedDates].sort();
+        list.innerHTML = '';
+        sorted.forEach(dateStr => {
+          const settings = state.timeSettings[dateStr];
+          const row = document.createElement('div');
+          row.className = 'date-row';
+          row.innerHTML = `
+            <div class="date-label">${formatJapanese(dateStr)}</div>
+            <div class="time-setting">
+              ${buildTimeSelect('start', dateStr, settings.start)}
+              <span class="time-separator">〜</span>
+              ${buildTimeSelect('end', dateStr, settings.end)}
+            </div>
+            <button class="btn-remove-date" data-date="${dateStr}" title="この日を削除">✕</button>
+          `;
+          list.appendChild(row);
+        });
+        list.querySelectorAll('select').forEach(sel => sel.addEventListener('change', handleTimeChange));
+        list.querySelectorAll('.btn-remove-date').forEach(btn => {
+          btn.addEventListener('click', e => toggleDate(e.currentTarget.dataset.date));
+        });
+      }
+
+      function buildTimeSelect(kind, dateStr, currentValue) {
+        const options = [];
+        for (let h = 7; h <= 22; h++) {
+          ['00', '30'].forEach(m => {
+            const val      = `${String(h).padStart(2,'0')}:${m}`;
+            const selected = val === currentValue ? 'selected' : '';
+            options.push(`<option value="${val}" ${selected}>${val}</option>`);
+          });
+        }
+        return `<select data-date="${dateStr}" data-kind="${kind}">${options.join('')}</select>`;
+      }
+
+      function handleTimeChange(e) {
+        const { date, kind } = e.target.dataset;
+        state.timeSettings[date][kind] = e.target.value;
+        const { start, end } = state.timeSettings[date];
+        if (start >= end) showToast('開始時刻は終了時刻より前にしてください', 'error');
+        updateConfirmButton();
+      }
+
+      function updateConfirmButton() {
+        const hasDate  = state.selectedDates.size > 0;
+        const allValid = [...state.selectedDates].every(d => {
+          const { start, end } = state.timeSettings[d];
+          return start < end;
+        });
+        elements.confirmBtn.disabled = !(hasDate && allValid);
+      }
+
+      // ============================================
+      //  確認モーダルを表示
+      // ============================================
+      function showModal() {
+        const slotDuration = getSlotDuration();
+        const rosterInfo   = window._rosterInfo;
+        const numGrades    = rosterInfo ? rosterInfo.numGrades  : 0;
+        const numClasses   = rosterInfo ? rosterInfo.numClasses : 0;
+        const sorted       = [...state.selectedDates].sort();
+
+        let html = `
+          <div class="confirm-item">
+            <span class="confirm-key">学年数</span>
+            <span class="confirm-val">${numGrades}学年</span>
+          </div>
+          <div class="confirm-item">
+            <span class="confirm-key">クラス数</span>
+            <span class="confirm-val">${numClasses}クラス</span>
+          </div>
+          <div class="confirm-item">
+            <span class="confirm-key">1コマ</span>
+            <span class="confirm-val">${slotDuration}分</span>
+          </div>
+        `;
+        sorted.forEach(dateStr => {
+          const { start, end } = state.timeSettings[dateStr];
+          const slots = calcSlots(start, end, slotDuration);
+          html += `
+            <div class="confirm-item">
+              <span class="confirm-key">${formatJapanese(dateStr)}</span>
+              <span class="confirm-val">${start} 〜 ${end}（${slots}コマ）</span>
+            </div>
+          `;
+        });
+
+        elements.confirmList.innerHTML = html;
+        elements.saveBtn.disabled  = false;
+        elements.saveBtn.innerHTML = '✓ 確定して<br>Googleフォームを作成';
+        elements.modalOverlay.classList.add('show');
+      }
+
+      // ============================================
+      //  保存 & フォーム自動生成
+      // ============================================
+      function saveSettings() {
+        const slotDuration = getSlotDuration();
+        const sorted       = [...state.selectedDates].sort();
+        const rosterInfo   = window._rosterInfo;
+
+        if (!rosterInfo) {
+          showToast('名簿シートを確認できません。ページを再読み込みしてください。', 'error');
+          return;
+        }
+
+        const settingsData = {
+          numGrades:    rosterInfo.numGrades,
+          numClasses:   rosterInfo.numClasses,
+          maxNumber:    rosterInfo.maxNumber,
+          classSizes:   rosterInfo.classSizes,
+          slotDuration: slotDuration,
+          dates: sorted.map(dateStr => ({
+            date:  dateStr,
+            start: state.timeSettings[dateStr].start,
+            end:   state.timeSettings[dateStr].end,
+            slots: calcSlots(
+              state.timeSettings[dateStr].start,
+              state.timeSettings[dateStr].end,
+              slotDuration
+            ),
+          })),
+        };
+
+        elements.saveBtn.disabled  = true;
+        elements.saveBtn.innerHTML = '<span class="btn-loading"><span class="spinner"></span>フォームを作成中...</span>';
+
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler(() => {
+              google.script.run
+                .withSuccessHandler((result) => {
+                  let res;
+                  try { res = JSON.parse(result); } catch(e) { res = { publishedUrl: result, editUrl: '' }; }
+                  elements.saveBtn.innerHTML = '✓ 完了';
+                  showCompleteScreen(res.publishedUrl || '', res.editUrl || '');
+                  applyLock();
+                  elements.modalOverlay.classList.remove('show');
+                })
+                .withFailureHandler((err) => {
+                  elements.saveBtn.disabled  = false;
+                  elements.saveBtn.innerHTML = '✓ 保存してフォームを作成';
+                  showToast('フォーム作成に失敗しました: ' + err.message, 'error');
+                })
+                .createInterviewForm(JSON.stringify(settingsData));
+            })
+            .withFailureHandler((err) => {
+              elements.saveBtn.disabled  = false;
+              elements.saveBtn.innerHTML = '✓ 保存してフォームを作成';
+              showToast('保存に失敗しました: ' + err.message, 'error');
+            })
+            .saveScheduleSettings(JSON.stringify(settingsData));
+          }
+      }
+
+      // ============================================
+      //  完了画面を表示
+      // ============================================
+      function showCompleteScreen(publishedUrl, editUrl) {
+        document.querySelectorAll('#screen1 .app-header, #screen1 .steps').forEach(el => {
+          el.style.display = 'none';
+        });
+
+        document.querySelectorAll('.card').forEach(c => {
+          if (!c.closest('#completeScreen') && !c.closest('#screen2') && !c.closest('#screen3') && !c.closest('#screen4')) {
+            c.style.display = 'none';
+          }
+        });
+
+        elements.confirmBtn.style.display = 'none';
+
+        elements.completePublishedUrl.value = publishedUrl;
+        elements.completeEditUrl.value      = editUrl;
+        elements.popupPublishedUrl.value    = publishedUrl;
+        elements.popupEditUrl.value         = editUrl;
+
+        elements.completeScreen.classList.add('show');
+        showToast('フォームを作成しました！', 'success');
+      } 
+
+      // 完了画面のコピーボタン
+      elements.copyPublishedBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(elements.completePublishedUrl.value)
+          .then(() => showToast('URLをコピーしました！', 'success'))
+          .catch(() => { elements.completePublishedUrl.select(); document.execCommand('copy'); showToast('コピーしました！', 'success'); });
+      });
+
+      elements.openCompleteEditBtn.addEventListener('click', () => {
+        window.open(elements.completeEditUrl.value, '_blank');
+      });
+
+      // ============================================
+      //  URLポップアップ
+      // ============================================
+      elements.copyPopupPublishedBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(elements.popupPublishedUrl.value)
+          .then(() => showToast('URLをコピーしました！', 'success'))
+          .catch(() => { elements.popupPublishedUrl.select(); document.execCommand('copy'); showToast('コピーしました！', 'success'); });
+      });
+
+      elements.openPopupEditBtn.addEventListener('click', () => {
+        window.open(elements.popupEditUrl.value, '_blank');
+      });
+
+      elements.closeUrlPopupBtn.addEventListener('click', () => {
+        elements.urlPopupOverlay.classList.remove('show');
+      });
+
+      // ============================================
+      //  ソフトロック
+      // ============================================
+      function applyLock() {
+        const lockTargets = ['calendarGrid', 'prevMonth', 'nextMonth', 'dateSettingsList'];
+        lockTargets.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { el.style.pointerEvents = 'none'; el.style.opacity = '0.5'; }
+        });
+        document.querySelectorAll('input[name="slotDuration"]').forEach(el => {
+          el.disabled = true;
+        });
+        elements.confirmBtn.style.display = 'none';
+      }
+
+      function releaseLock() {
+        const lockTargets = ['calendarGrid', 'prevMonth', 'nextMonth', 'dateSettingsList'];
+        lockTargets.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { el.style.pointerEvents = ''; el.style.opacity = ''; }
+        });
+        document.querySelectorAll('input[name="slotDuration"]').forEach(el => {
+          el.disabled = false;
+        });
+        elements.confirmBtn.style.display = 'block';
+      }
+
+      elements.resetBtn.addEventListener('click', () => {
+        elements.resetModalOverlay.classList.add('show');
+      });
+
+      elements.resetCancelBtn.addEventListener('click', () => {
+        elements.resetModalOverlay.classList.remove('show');
+      });
+
+      elements.resetConfirmBtn.addEventListener('click', () => {
+        elements.resetModalOverlay.classList.remove('show');
+        elements.modalOverlay.classList.remove('show');
+        releaseLock();
+        elements.completeScreen.classList.remove('show');
+
+        document.querySelectorAll('#screen1 .app-header, #screen1 .steps').forEach(el => {
+          el.style.display = '';
+        });
+
+        document.querySelectorAll('.card').forEach(c => {
+          if (!c.closest('#screen2') && !c.closest('#screen3') && !c.closest('#screen4')) {
+            c.style.display = '';
+          }
+        });
+
+        state.selectedDates.clear();
+        state.timeSettings = {};
+        renderCalendar();
+        updateSelectedCount();
+        renderDateSettings();
+        updateConfirmButton();
+        showToast('設定をリセットしました', 'success');
+      });
+
+      // ============================================
+      //  ユーティリティ関数
+      // ============================================
+      function calcSlots(start, end, duration) {
+        const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+        return Math.floor((toMin(end) - toMin(start)) / duration);
+      }
+
+      function getSlotDuration() {
+        return parseInt(document.querySelector('input[name="slotDuration"]:checked').value);
+      }
+
+      function showToast(message, type = '') {
+        const toast = elements.toast;
+        toast.textContent = message;
+        toast.className   = `toast ${type} show`;
+        setTimeout(() => toast.classList.remove('show'), 2500);
+      }
+
+      // ============================================
+      // 出力完了ポップアップ
+      // ============================================
+      function showCompleteOutputPopup() {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 9999;
+        `;
+
+        overlay.innerHTML = `
+          <div style="
+            background: #fff; border-radius: 16px;
+            padding: 40px 36px; max-width: 420px; width: 90%;
+            text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+          ">
+            <div style="font-size: 1.25rem; font-weight: 700; color: #1e293b; margin-bottom: 8px;">
+              🍵 お疲れ様でした！ 🍡
+            </div>
+            <div style="font-size: 0.875rem; color: #64748b; line-height: 1.7; margin-bottom: 24px;">
+              面談日程表をGoogleスプレッドシートに<br>
+              出力しました。<br>
+              面談終了後はGoogleフォームを閉鎖し、<br>
+              個人情報の管理にご注意ください。
+            </div>
+            <button id="popupCloseBtn" style="
+              width: 100%;
+              background: #e07b00; color: #fff;
+              border: none; border-radius: 8px;
+              padding: 12px 24px; font-size: 0.95rem;
+              font-weight: 600; cursor: pointer;
+            ">閉じる</button>
+          </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        document.getElementById('popupCloseBtn').addEventListener('click', () => {
+          overlay.remove();
+        });
+      }
+
+      function formatDate(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function formatJapanese(dateStr) {
+        const date     = new Date(dateStr + 'T00:00:00');
+        const weekdays = ['日','月','火','水','木','金','土'];
+        return `${date.getMonth()+1}月${date.getDate()}日（${weekdays[date.getDay()]}）`;
+      }
+
+      // XSS対策：HTML特殊文字をエスケープ
+      function esc(str) {
+        return String(str || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      // ============================================
+      //  イベントリスナー（画面1）
+      // ============================================
+      document.getElementById('prevMonth').addEventListener('click', () => {
+        state.viewMonth--;
+        if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
+        renderCalendar();
+      });
+
+      document.getElementById('nextMonth').addEventListener('click', () => {
+        state.viewMonth++;
+        if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
+        renderCalendar();
+      });
+
+      elements.confirmBtn.addEventListener('click', showModal);
+      elements.backBtn.addEventListener('click', () => elements.modalOverlay.classList.remove('show'));
+      elements.saveBtn.addEventListener('click', saveSettings);
+
+      // フォーム作成済みバナーの表示チェック
+      if (typeof google !== 'undefined') {
+        google.script.run
+          .withSuccessHandler((formId) => {
+            if (formId) {
+              document.getElementById('formCreatedBanner').style.display = 'block';
+            }
+          })
+          .withFailureHandler(() => {})
+          .getFormId();
+      }
+
+      document.getElementById('goToScreen2FromBanner').addEventListener('click', () => {
+        showScreen2();
+      });
+
+      // ============================================
+      //  初期化：名簿シートの確認
+      // ============================================
+      function initScreen1() {
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler(handleRosterInfo)
+            .withFailureHandler((err) => {
+              showRosterError('名簿の確認に失敗しました: ' + err.message);
+            })
+            .getRosterInfo();
+        } else {
+          handleRosterInfo(JSON.stringify({
+            numGrades: 6, numClasses: 2,
+            classesPerGrade: {"1":2,"2":2,"3":2,"4":2,"5":2,"6":2},
+            classSizes: {"1-1":25,"1-2":25,"2-1":25,"2-2":25,
+                        "3-1":25,"3-2":25,"4-1":25,"4-2":25,
+                        "5-1":25,"5-2":25,"6-1":25,"6-2":25},
+            maxNumber: 25, totalClasses: 12
+          }));
+        }
+      }
+
+      function handleRosterInfo(resultStr) {
+        let result;
+        try { result = JSON.parse(resultStr); } catch(e) {
+          showRosterError('名簿データの読み込みに失敗しました');
+          return;
+        }
+        if (result.error) { showRosterError(result.error); return; }
+
+        window._rosterInfo = result;
+
+        const div = document.getElementById('rosterInfoStatus');
+        div.style.background  = '#f0fdf4';
+        div.style.borderColor = '#86efac';
+        div.style.color       = 'var(--success)';
+        div.innerHTML = `
+          ✅ 名簿を確認しました<br>
+          <span style="font-size:0.8rem;">
+            ${result.numGrades}学年・${result.totalClasses}クラス・最大${result.maxNumber}番
+          </span>
+        `;
+        updateConfirmButton();
+      }
+
+      function showRosterError(message) {
+        window._rosterInfo = null;
+        const div = document.getElementById('rosterInfoStatus');
+        div.style.background  = '#fef2f2';
+        div.style.borderColor = '#fca5a5';
+        div.style.color       = 'var(--danger)';
+        div.textContent       = '⚠️ ' + message;
+        elements.confirmBtn.disabled = true;
+      }
+
+      initScreen1();
+      renderCalendar();
+      updateSelectedCount();
+
+      // ============================================================
+      //  画面2の処理（全面改修）
+      // ============================================================
+
+      // 画面2に遷移
+      elements.goToScreen2Btn.addEventListener('click', showScreen2);
+
+      function showScreen2() {
+        elements.completeScreen.classList.remove('show');
+        document.getElementById('screen1').style.display = 'none';
+        document.getElementById('screen2').style.display = 'block';
+
+        // 復元UIを毎回いったん初期化（前回状態の残りを防ぐ）
+        const area = document.getElementById('resumeDataArea');
+        const resumeBtn = document.getElementById('resumeDataBtn');
+        if (area) area.style.display = 'none';
+        if (resumeBtn) resumeBtn.onclick = null;
+
+        initScreen2();
+
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler((resultRaw) => {
+              let result = resultRaw;
+
+              if (typeof resultRaw === 'string') {
+                try { result = JSON.parse(resultRaw); }
+                catch (_) { return; }
+              }
+
+              if (!result || !Array.isArray(result.students) || result.students.length === 0) return;
+              if (!area || !resumeBtn) return;
+
+              area.style.display = 'block';
+              resumeBtn.onclick = () => {
+                area.style.display = 'none';
+                restoreFromWorkSheet(result.students);
+              };
+            })
+            .withFailureHandler(() => {})
+            .loadWorkSheet();
+        }
+      }
+
+      function restoreFromWorkSheet(savedStudents) {
+        screen2Data = savedStudents;
+
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler((raw) => {
+              if (!raw) return;
+
+              let s1 = raw;
+              if (typeof raw === 'string') {
+                try {
+                  s1 = JSON.parse(raw);
+                } catch (_) {
+                  showToast('設定データ形式が不正です', 'error');
+                  return;
+                }
+              }
+
+              if (!s1 || !Array.isArray(s1.dates) || !s1.numGrades || !s1.numClasses) {
+                showToast('設定データが不足しています', 'error');
+                return;
+              }
+
+              window._screen1Settings = s1;
+              buildScreen2UI(s1);
+
+              const summary = {
+                total:      screen2Data.length,
+                answered:   screen2Data.filter(s => s.status === 'answered').length,
+                unanswered: screen2Data.filter(s => s.status === 'unanswered').length,
+                flagged:    screen2Data.filter(s => s.flags && s.flags.length > 0).length,
+              };
+              renderSummary(summary);
+
+              document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+              document.querySelector('.filter-tab[data-filter="all"]').classList.add('active');
+              renderResponseTable(screen2Data, 'all');
+
+              document.getElementById('summaryCard').style.display       = 'block';
+              document.getElementById('responseListCard').style.display   = 'block';
+              document.getElementById('taskGuideCard').style.display      = 'block';
+              document.getElementById('completeScreen2Btn').style.display = 'block';
+
+              showToast('前回の作業データを復元しました！', 'success');
+            })
+            .withFailureHandler((err) => {
+              const msg = (err && err.message) ? err.message : String(err || '不明なエラー');
+              showToast('設定の読み込みに失敗しました: ' + msg, 'error');
+            })
+            .loadScheduleSettings();
+        }
+      }
+
+      function initScreen2() {
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler((raw) => {
+              if (!raw) {
+                showToast('画面1の設定が見つかりません。先に画面1でフォームを作成してください。', 'error');
+                return;
+              }
+
+              let s1 = raw;
+              if (typeof raw === 'string') {
+                try {
+                  s1 = JSON.parse(raw);
+                } catch (_) {
+                  showToast('設定データ形式が不正です', 'error');
+                  return;
+                }
+              }
+
+              if (!s1 || !Array.isArray(s1.dates) || !s1.numGrades || !s1.numClasses) {
+                showToast('設定データが不足しています', 'error');
+                return;
+              }
+
+              buildScreen2UI(s1);
+            })
+            .withFailureHandler((err) => {
+              const msg = (err && err.message) ? err.message : String(err || '不明なエラー');
+              showToast('設定の読み込みに失敗しました: ' + msg, 'error');
+            })
+            .loadScheduleSettings();
+        } else {
+          const s1 = getScreen1SettingsFromState();
+          if (!s1) {
+            showToast('接続エラー：画面1で日付を選択してから進んでください', 'error');
+            return;
+          }
+          buildScreen2UI(s1);
+        }
+      }
+
+      function buildScreen2UI(s1) {
+      if (!s1 || !Number.isFinite(Number(s1.numGrades)) || !Number.isFinite(Number(s1.numClasses))) {
+        showToast('画面2の設定データが不正です', 'error');
+        return;
+      }
+      const numGrades = Number(s1.numGrades);
+      const numClasses = Number(s1.numClasses);
+      const gradeSelect = document.getElementById('targetGradeSelect');
+      const classSelect = document.getElementById('targetClassSelect');
+      if (!gradeSelect || !classSelect) {
+        showToast('画面2の表示要素が見つかりません', 'error');
+        return;
+      }
+      gradeSelect.innerHTML = '<option value="">学年を選択</option>';
+      classSelect.innerHTML = '<option value="">組を選択</option>';
+      for (let i = 1; i <= numGrades; i++) {
+        gradeSelect.innerHTML += `<option value="${i}">${i}年</option>`;
+      }
+      for (let i = 1; i <= numClasses; i++) {
+        classSelect.innerHTML += `<option value="${i}">${i}組</option>`;
+      }
+      window._screen1Settings = s1;
+
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler((result) => {
+              let res = result;
+              if (typeof result === 'string') {
+                try {
+                  res = JSON.parse(result);
+                } catch (_) {
+                  res = { exists: false, count: 0 };
+                }
+              }
+              const div = document.getElementById('rosterStatus');
+              if (res && res.exists) {
+                div.style.background  = '#f0fdf4';
+                div.style.borderColor = '#86efac';
+                div.style.color       = 'var(--success)';
+                div.textContent =
+                  '✅ 名簿シートあり（' + (res.count ?? 0) + '名）- 名簿シートを使ってクラス人数を自動取得し、フォームの回答と氏名・番号を照合しています';
+              } else {
+                div.style.background  = 'var(--warning-light)';
+                div.style.borderColor = '#fcd34d';
+                div.style.color       = 'var(--warning)';
+                div.innerHTML =
+                  '⚠️ 名簿シートなし - 番号の連番で照合します<br>' +
+                  '<span style="font-size:0.75rem;">精度を上げるにはスプレッドシートに「名簿」シートを追加してください</span>';
+              }
+            })
+            .withFailureHandler(() => {
+              document.getElementById('rosterStatus').textContent = '名簿シートの確認に失敗しました';
+            })
+            .checkRosterSheet();
+        } else {
+          document.getElementById('rosterStatus').textContent = '（接続エラー）';
+        }
+      }
+
+      function getScreen1SettingsFromState() {
+        const sorted = [...state.selectedDates].sort();
+        if (sorted.length === 0) return null;
+        return {
+          numGrades:    (window._rosterInfo && window._rosterInfo.numGrades)  || 6,
+          numClasses:   (window._rosterInfo && window._rosterInfo.numClasses) || 2,
+          slotDuration: getSlotDuration(),
+          dates: sorted.map(d => ({
+            date:  d,
+            start: state.timeSettings[d].start,
+            end:   state.timeSettings[d].end,
+          })),
+        };
+      }
+
+      // 対象範囲ラジオボタン
+      document.querySelectorAll('input[name="targetRange"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          const area = document.getElementById('specificRangeArea');
+          area.style.display = e.target.value === 'specific' ? 'flex' : 'none';
+        });
+      });
+
+      // データ読み込みボタン
+      document.getElementById('loadDataBtn').addEventListener('click', () => {
+        const s2 = buildScreen2Settings();
+        window._lastS2Settings = s2; // 画面4の出力ボタン切り替えに使う
+
+        if (s2.targetGrade !== null || s2.targetClass !== null) {
+          if (!s2.targetGrade || !s2.targetClass) {
+            showToast('学年と組の両方を選択してください', 'error');
+            return;
+          }
+        }
+
+        // 2回目以降（すでにデータが読み込まれている）は確認ポップアップを表示
+        // screen2Data.length > 0 なら既にデータがある状態
+        if (screen2Data.length > 0) {
+          if (!confirm(
+            'フォームの回答データを読み込みなおします。\n\n' +
+            '⚠️ 注意：これまでに設定した対応プルダウン・内部メモ・フラグの変更が\n' +
+            'すべてリセットされます。\n\n' +
+            '本当に読み込みなおしますか？'
+          )) return;
+          screen2Data = []; // ブラウザ側のデータもリセット
+        }
+
+        const loadBtn = document.getElementById('loadDataBtn');
+        loadBtn.disabled  = true;
+        loadBtn.innerHTML = '<span class="btn-loading"><span class="spinner"></span>読み込み中...</span>';
+
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler(() => {
+              google.script.run
+                .withSuccessHandler((result) => {
+                  handleLoadResult(result);
+                  loadBtn.disabled    = false;
+                  loadBtn.textContent = 'フォームの回答データを読み込む →';
+                })
+                .withFailureHandler((err) => {
+                  showToast('データ読み込みに失敗しました: ' + err.message, 'error');
+                  loadBtn.disabled    = false;
+                  loadBtn.textContent = 'フォームの回答データを読み込む →';
+                })
+                .loadFormResponses();
+            })
+            .withFailureHandler((err) => {
+              showToast('設定の保存に失敗しました: ' + err.message, 'error');
+              loadBtn.disabled    = false;
+              loadBtn.textContent = 'フォームの回答データを読み込む →';
+            })
+            .saveScreen2Settings(JSON.stringify(s2));
+        } else {
+          setTimeout(() => {
+            handleLoadResult(JSON.stringify(getMockData()));
+            loadBtn.disabled    = false;
+            loadBtn.textContent = 'フォームの回答データを読み込む →';
+          }, 1000);
+        }
+      });
+
+      // URLポップアップボタン
+      document.getElementById('showUrlPopupBtn').addEventListener('click', () => {
+        if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler((resultStr) => {
+              const result = JSON.parse(resultStr);
+              elements.popupPublishedUrl.value = result.publishedUrl || '';
+              elements.popupEditUrl.value      = result.editUrl      || '';
+              elements.urlPopupOverlay.classList.add('show');
+            })
+            .withFailureHandler(() => {
+              elements.urlPopupOverlay.classList.add('show');
+            })
+            .getFormUrl();
+        } else {
+          elements.urlPopupOverlay.classList.add('show');
+        }
+      });
+
+      function buildScreen2Settings() {
+        const rangeType  = document.querySelector('input[name="targetRange"]:checked').value;
+        const rosterInfo = window._rosterInfo;
+        return {
+          targetGrade: rangeType === 'specific' ? document.getElementById('targetGradeSelect').value : null,
+          targetClass: rangeType === 'specific' ? document.getElementById('targetClassSelect').value : null,
+          classSizes:  rosterInfo ? rosterInfo.classSizes : {},
+        };
+      }
+
+      // ============================================================
+      //  データ読み込み結果の処理
+      // ============================================================
+      let screen2Data = [];
+
+      function handleLoadResult(resultStr) {
+        let result;
+        try { result = JSON.parse(resultStr); } catch(e) { result = { error: resultStr }; }
+
+        if (result.error) {
+          showToast(result.error, 'error');
+          return;
+        }
+
+        screen2Data = result.students || [];
+
+        // ============================================================
+        // ※ 画面2改修：デフォルト対応値を設定する
+        //   回答済み → 'auto'（自動）
+        //   要確認   → 'manual'（手動指定）  ※ allNGまたはnameSpace
+        //   未回答   → 'none'（面談なし）
+        //
+        // 優先順位：要確認 > 未回答 > 回答済み
+        // ※ 既にtreatmentが設定されている場合はそのまま維持する
+        // ============================================================
+        screen2Data.forEach(s => {
+          if (s.treatment) return; // 既に設定済みならスキップ
+
+          const isCheckRequired = s.flags && s.flags.some(f => f === 'allNG' || f === 'nameSpace');
+
+          if (s.status === 'unanswered') {
+            s.treatment = 'none';
+          } else if (isCheckRequired) {
+            s.treatment = 'manual';
+          } else {
+            s.treatment = 'auto';
+          }
+        });
+
+        renderSummary(result.summary);
+
+        // ※ 画面2改修：タブを「全員」にリセット
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.filter-tab[data-filter="all"]').classList.add('active');
+        renderResponseTable(screen2Data, 'all');
+
+        document.getElementById('summaryCard').style.display      = 'block';
+        document.getElementById('responseListCard').style.display  = 'block';
+        document.getElementById('taskGuideCard').style.display     = 'block';
+        document.getElementById('completeScreen2Btn').style.display = 'block';
+
+        showToast('データを読み込みました！', 'success');
+      }
+
+      function renderSummary(summary) {
+        const safe = summary || {};
+        document.getElementById('summaryTotal').textContent      = safe.total ?? 0;
+        document.getElementById('summaryAnswered').textContent   = safe.answered ?? 0;
+        document.getElementById('summaryUnanswered').textContent = safe.unanswered ?? 0;
+        document.getElementById('summaryFlagged').textContent    = safe.flagged ?? 0;
+      }
+
+      // ============================================================
+      //  テーブル描画
+      //  ※ 画面2改修：列構成を変更
+      //     番号 / 氏名 / 対応（プルダウン） / 状態 / 兄弟姉妹✓ / 話題 / 内部メモ
+      // ============================================================
+      function renderResponseTable(students, filter = 'all') {
+        const tbody = document.getElementById('responseTableBody');
+        tbody.innerHTML = '';
+
+        // フィルタリング
+        let filtered = students;
+        if (filter === 'flagged') {
+          // 要確認：allNG・nameSpaceフラグ OR 手動指定に設定された人
+          filtered = students.filter(s =>
+            (s.flags && s.flags.some(f => f === 'allNG' || f === 'nameSpace'))
+            || s.treatment === 'manual'
+          );
+        }
+        if (filter === 'sibling') {
+          // 兄弟姉妹：siblingフィールドが入力されている人
+          filtered = students.filter(s => s.sibling);
+        }
+        if (filter === 'none') {
+          filtered = students.filter(s => s.treatment === 'none');
+        }
+
+        if (filtered.length === 0) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td colspan="8" style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.875rem;">
+              該当する生徒はいません
+            </td>
+          `;
+          tbody.appendChild(tr);
+          return;
+        }
+
+        const normalized = [...filtered].sort((a, b) => {
+          const g1 = Number(a.grade), g2 = Number(b.grade);
+          if (g1 !== g2) return g1 - g2;
+          const k1 = Number(a.klass), k2 = Number(b.klass);
+          if (k1 !== k2) return k1 - k2;
+          const n1 = Number(a.number), n2 = Number(b.number);
+          return n1 - n2;
+        });
+
+        let currentGrade    = null;
+        let currentClass    = null;
+        let classColorIndex = 0;
+
+        normalized.forEach(s => {
+          // 学年の見出し行
+          if (s.grade !== currentGrade) {
+            currentGrade    = s.grade;
+            currentClass    = null;
+            classColorIndex = 0;
+            const gradeRow = document.createElement('tr');
+            gradeRow.innerHTML = `
+              <td colspan="8" style="
+                padding: 8px 10px;
+                background: #94a3b8;
+                color: #fff;
+                font-size: 0.8rem;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+              ">${esc(s.grade)}学年</td>
+            `;
+            tbody.appendChild(gradeRow);
+          }
+
+          // クラスが変わったら色を切り替え（奇数クラス→白、偶数クラス→薄グレー）
+          if (s.klass !== currentClass) {
+            currentClass = s.klass;
+            classColorIndex++;
+          }
+          const rowBg = classColorIndex % 2 === 1 ? '#ffffff' : '#f1f5f9';
+
+          // 状態バッジ
+          let badge = '';
+          if (s.status === 'answered') {
+            badge = '<span class="badge badge-answered">回答済</span>';
+          } else {
+            badge = '<span class="badge badge-unanswered">未回答</span>';
+          }
+          // ※ 画面2改修：要確認バッジは allNG・nameSpace のみ
+          if (s.flags && s.flags.some(f => f === 'allNG' || f === 'nameSpace')) {
+            const reason = s.flags.includes('allNG') ? '全コマNG' : '氏名要確認';
+            badge += ` <span class="badge badge-flagged">${reason}</span>`;
+          }
+
+          // 兄弟姉妹情報
+          const siblingText = s.sibling ? '✓' : '—';
+          const siblingTitle = s.sibling ? esc(s.sibling) : '';
+
+          const topicText  = s.topic || '';
+          const topicShort = topicText.length > 16 ? topicText.slice(0, 16) + '…' : topicText;
+
+          const key = esc(s.grade) + '-' + esc(s.klass) + '-' + esc(s.number);
+
+          // ============================================================
+          // 対応プルダウンの現在値
+          // ※ 画面2改修：デフォルト値はhandleLoadResultで設定済み
+          // ============================================================
+          const treatment = s.treatment || 'auto';
+          const selectHtml = buildTreatmentSelect(key, treatment);
+
+          const tr = document.createElement('tr');
+          tr.style.background   = rowBg;
+          tr.style.borderBottom = '1px solid var(--border)';
+          tr.innerHTML = `
+            <td style="padding: 7px 6px; color: var(--text-muted); white-space: nowrap; font-size: 0.8rem;">
+              ${esc(s.grade)}年${esc(s.klass)}組${esc(s.number)}番
+            </td>
+            <td style="padding: 7px 6px; font-weight: 600; font-size: 0.8rem;">
+              ${esc(s.lastName)}${esc(s.firstName)}
+            </td>
+            <td class="treatment-cell">${selectHtml}</td>
+            <td style="padding: 7px 6px;">${badge}</td>
+            <td style="padding: 7px 6px; text-align: center; font-size: 0.9rem;" title="${siblingTitle}">
+              ${siblingText}
+            </td>
+            <td style="padding: 7px 6px; font-size: 0.75rem; color: var(--text-muted);" title="${esc(topicText)}">
+              ${esc(topicShort) || '—'}
+            </td>
+            <td style="padding: 7px 4px; text-align: center;">
+              <button
+                class="flag-btn"
+                data-key="${key}"
+                title="確認フラグ"
+                style="background: none; border: none; cursor: pointer; font-size: 1rem;
+                      opacity: ${s.flagRed ? '1' : '0.25'}; transition: opacity 0.15s;">
+                🚩
+              </button>
+            </td>
+            <td style="padding: 7px 6px;">
+              <input
+                type="text"
+                class="memo-input"
+                data-key="${key}"
+                value="${esc(s.memo)}"
+                placeholder="内部メモ..."
+                style="width: 100%; font-size: 0.75rem; padding: 3px 6px;
+                      border: 1px solid var(--border); border-radius: 4px; background: transparent;"
+              >
+            </td>
+          `;
+
+          // 生成直後にイベントを結びつける
+          const flagBtn = tr.querySelector('.flag-btn');
+          if (flagBtn) {
+            flagBtn.addEventListener('click', (e) => {
+              toggleFlag(e.currentTarget.dataset.key, e.currentTarget);
+            });
+          }
+
+          const memoInput = tr.querySelector('.memo-input');
+          if (memoInput) {
+            memoInput.addEventListener('blur', (e) => {
+              saveMemo(e.currentTarget.dataset.key, e.currentTarget.value);
+            });
+          }
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      // ============================================================
+      //  対応プルダウンのHTML生成
+      //  ※ 画面2改修：新規追加
+      //  選択肢：自動 / 手動指定 / 面談なし
+      //  data-value属性で色分けのCSSが適用される
+      // ============================================================
+      function buildTreatmentSelect(key, currentValue) {
+        const options = [
+          { value: 'auto',   label: '自動' },
+          { value: 'manual', label: '手動指定' },
+          { value: 'none',   label: '面談なし' },
+        ];
+        const opts = options.map(o =>
+          `<option value="${o.value}" ${currentValue === o.value ? 'selected' : ''}>${o.label}</option>`
+        ).join('');
+
+        return `
+          <select class="treatment-select" data-value="${currentValue}"
+            onchange="setTreatment('${key}', this.value, this)">
+            ${opts}
+          </select>
+        `;
+      }
+
+      // ============================================================
+      //  フィルタータブ
+      // ============================================================
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+          document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+          e.target.classList.add('active');
+          renderResponseTable(screen2Data, e.target.dataset.filter);
+        });
+      });
+
+      // ============================================================
+      //  対応プルダウンの変更処理
+      //  ※ 画面2改修：新規追加
+      //  - data-value属性を更新してCSSの色分けを反映
+      //  - screen2Data内のtreatmentも更新
+      //  - GASに保存
+      //  - 「面談なし」タブを現在表示中なら再描画（即時反映）
+      // ============================================================
+      function setTreatment(key, value, selectEl) {
+        const student = screen2Data.find(s => `${s.grade}-${s.klass}-${s.number}` === key);
+        if (!student) return;
+
+        student.treatment = value;
+
+        // 現在DOMに残っている要素だけ見た目更新（消えていても落とさない）
+        if (selectEl && document.body.contains(selectEl)) {
+          selectEl.setAttribute('data-value', value);
+        }
+
+        if (typeof google !== 'undefined') {
+          google.script.run.saveStudentData(JSON.stringify({ key, treatment: value }));
+        }
+
+        const activeFilter = document.querySelector('.filter-tab.active')?.dataset.filter || 'all';
+
+        // フィルタ表示に影響するタブは必ず再描画
+        if (activeFilter === 'none' || activeFilter === 'flagged' || activeFilter === 'all') {
+          renderResponseTable(screen2Data, activeFilter);
+        }
+      }
+
+      // ============================================================
+      //  赤フラグのトグル
+      //  クリックするたびにON/OFFが切り替わる
+      //  ON：🚩が濃く表示、OFF：🚩が薄く表示
+      // ============================================================
+      function toggleFlag(key, btnEl) {
+        const student = screen2Data.find(s => `${s.grade}-${s.klass}-${s.number}` === key);
+        if (!student) return;
+
+        // 現在の状態を反転
+        student.flagRed = !student.flagRed;
+
+        // ボタンの見た目を即時更新（opacityで表現）
+        btnEl.style.opacity = student.flagRed ? '1' : '0.25';
+
+        // GASに保存
+        if (typeof google !== 'undefined') {
+          google.script.run.saveStudentData(JSON.stringify({ key, flagRed: student.flagRed }));
+        }
+      }
+
+      // メモの保存
+      function saveMemo(key, value) {
+        const student = screen2Data.find(s => `${s.grade}-${s.klass}-${s.number}` === key);
+        if (student) student.memo = value;
+        if (typeof google !== 'undefined') {
+          google.script.run.saveStudentData(JSON.stringify({ key, memo: value }));
+        }
+      }
+
+      // データ整備完了ボタン → 画面3へ遷移
+      document.getElementById('completeScreen2Btn').addEventListener('click', () => {
+        showScreen3();
+      });
+
+      // ============================================================
+      //  画面3：ルール設定・スケジューリング
+      // ============================================================
+
+      // 画面3に遷移する
+      // screen2Dataを引き継いで手動指定リストを生成する
+      function showScreen3() {
+        document.getElementById('screen2').style.display = 'none';
+        document.getElementById('screen3').style.display = 'block';
+        initScreen3();
+      }
+
+      function initScreen3() {
+        const s1 = window._screen1Settings;
+        if (!s1) {
+          showToast('画面1の設定が見つかりません', 'error');
+          return;
+        }
+
+        // 手動指定の人を抽出（treatment === 'manual'）
+        const manualStudents = screen2Data.filter(s => s.treatment === 'manual');
+        document.getElementById('manualCountBadge').textContent = manualStudents.length + '名';
+
+        const list    = document.getElementById('manualAssignList');
+        const emptyMsg = document.getElementById('manualEmptyMsg');
+        list.innerHTML = '';
+
+        if (manualStudents.length === 0) {
+          emptyMsg.style.display = 'block';
+        } else {
+          emptyMsg.style.display = 'none';
+
+          // 日時の選択肢を生成（全コマ一覧）
+          // s1.dates から全コマの「日付・開始時刻」を列挙する
+          const slotOptions = buildSlotOptions(s1);
+
+          manualStudents.forEach(s => {
+            const key = `${s.grade}-${s.klass}-${s.number}`;
+
+            // フラグバッジを生成
+            let badgeHtml = '';
+            if (s.flags && s.flags.includes('allNG')) {
+              badgeHtml = `<span style="
+                font-size: 0.72rem; font-weight: 600;
+                background: var(--warning-light); color: var(--warning);
+                border: 1px solid #fcd34d; border-radius: 20px; padding: 2px 8px;
+                white-space: nowrap;
+              ">全コマNG</span>`;
+            } else if (s.flags && s.flags.includes('nameSpace')) {
+              badgeHtml = `<span style="
+                font-size: 0.72rem; font-weight: 600;
+                background: var(--primary-light); color: var(--primary);
+                border: 1px solid #bfdbfe; border-radius: 20px; padding: 2px 8px;
+                white-space: nowrap;
+              ">氏名要確認</span>`;
+            } else {
+              badgeHtml = `<span style="
+                font-size: 0.72rem; font-weight: 600;
+                background: var(--bg); color: var(--text-muted);
+                border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px;
+                white-space: nowrap;
+              ">手動指定</span>`;
+            }
+
+            const row = document.createElement('div');
+            row.style.cssText = `
+              display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+              border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+              flex-wrap: wrap;
+            `;
+            row.innerHTML = `
+              <div style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; min-width: 90px;">
+                ${esc(s.grade)}年${esc(s.klass)}組${esc(s.number)}番
+              </div>
+              <div style="font-size: 0.875rem; font-weight: 600; flex: 1; min-width: 80px;">
+                ${esc(s.lastName)}${esc(s.firstName)}
+              </div>
+              ${badgeHtml}
+              <select id="manualSlot-${key}"
+                style="font-size: 0.8rem; padding: 6px 10px; border: 1px solid var(--border);
+                      border-radius: 6px; background: var(--white); color: var(--text); cursor: pointer;">
+                <option value="">日時を選択（省略可）</option>
+                ${slotOptions}
+              </select>
+            `;
+            list.appendChild(row);
+
+            // プルダウン変更のたびに重複チェックを実行
+            const sel = row.querySelector(`#manualSlot-${key}`);
+            if (sel) sel.addEventListener('change', checkDuplicateSlots);
+          });
+
+          // 初期状態でも重複チェックを実行（前回の選択値が残っている場合に対応）
+          checkDuplicateSlots();
+        }
+
+        // 結果カードを非表示にリセット
+        document.getElementById('scheduleResultCard').style.display = 'none';
+      }
+
+      // ============================================================
+      //  全コマの選択肢を生成するヘルパー
+      //  s1.dates の各日付・開始時刻からコマ一覧を作る
+      //  出力例：<option value="2026-04-20_14:30">4月20日（月）14:30〜14:45</option>
+      // ============================================================
+      function buildSlotOptions(s1) {
+        const lines = [];
+        const duration = s1.slotDuration || 15;
+
+        s1.dates.forEach(d => {
+          const startMin = timeStrToMin(d.start);
+          const endMin   = timeStrToMin(d.end);
+          for (let m = startMin; m < endMin; m += duration) {
+            const slotStart = minToTimeStr(m);
+            const slotEnd   = minToTimeStr(m + duration);
+            const dateLabel = formatJapanese(d.date);
+            const value     = `${d.date}_${slotStart}`;
+            lines.push(`<option value="${value}">${dateLabel} ${slotStart}〜${slotEnd}</option>`);
+          }
+        });
+        return lines.join('');
+      }
+
+      // "HH:MM" → 分に変換
+      function timeStrToMin(t) {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      }
+
+      // 分 → "HH:MM" に変換
+      function minToTimeStr(min) {
+        const h = Math.floor(min / 60);
+        const m = min % 60;
+        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      }
+
+      // ============================================================
+      //  手動指定の日時重複チェック
+      //  プルダウンが変更されるたびに呼ばれる
+      //
+      //  重複あり → 警告を表示・実行ボタンを無効化
+      //  重複なし → 警告を非表示・実行ボタンを有効化
+      // ============================================================
+      function checkDuplicateSlots() {
+        const manualStudents = screen2Data.filter(s => s.treatment === 'manual');
+
+        // 各生徒の選択値を取得（空文字＝未選択はチェック対象外）
+        const selections = manualStudents.map(s => {
+          const key = `${s.grade}-${s.klass}-${s.number}`;
+          const sel = document.getElementById(`manualSlot-${key}`);
+          return {
+            name:  `${s.grade}年${s.klass}組${s.number}番 ${s.lastName}${s.firstName}`,
+            value: sel ? sel.value : '',
+          };
+        }).filter(s => s.value !== '');  // 未選択は除外
+
+        // 同じvalueが2件以上あるものを抽出
+        const countMap = {};
+        selections.forEach(s => {
+          if (!countMap[s.value]) countMap[s.value] = [];
+          countMap[s.value].push(s.name);
+        });
+
+        const duplicates = Object.entries(countMap).filter(([, names]) => names.length >= 2);
+
+        const btn     = document.getElementById('runScheduleBtn');
+        const warning = document.getElementById('duplicateWarning');
+        const detail  = document.getElementById('duplicateDetail');
+
+        if (duplicates.length > 0) {
+          // 重複あり → 警告表示・ボタン無効
+          detail.innerHTML = duplicates.map(([slot, names]) => {
+            // '2026-04-20_14:30' → '4月20日（月）14:30' に変換して表示
+            const [date, time] = slot.split('_');
+            const label = formatJapanese(date) + ' ' + time;
+            return `<strong>${label}</strong>：${names.map(n => esc(n)).join('、')}`;
+          }).join('<br>');
+          warning.style.display = 'block';
+          btn.disabled = true;
+          btn.style.background = 'var(--border)';
+          btn.style.color      = 'var(--text-muted)';
+          btn.style.cursor     = 'not-allowed';
+        } else {
+          // 重複なし → 警告非表示・ボタン有効
+          warning.style.display = 'none';
+          btn.disabled = false;
+          btn.style.background = 'var(--success)';
+          btn.style.color      = 'var(--white)';
+          btn.style.cursor     = 'pointer';
+        }
+      }
+
+      // ============================================================
+      //  実行ボタン
+      //  ① 重複チェック（念のため再確認）
+      //  ② 手動指定の日時をscreen2Dataに反映
+      //  ③ GASのrunScheduling()を呼ぶ（本番）
+      // ============================================================
+      document.getElementById('runScheduleBtn').addEventListener('click', () => {
+        // 念のため重複チェック（ボタンが有効でも再確認）
+        const manualStudents = screen2Data.filter(s => s.treatment === 'manual');
+        const slotValues = manualStudents.map(s => {
+          const key = `${s.grade}-${s.klass}-${s.number}`;
+          const sel = document.getElementById(`manualSlot-${key}`);
+          return sel ? sel.value : '';
+        }).filter(v => v !== '');
+        const hasDuplicate = slotValues.length !== new Set(slotValues).size;
+        if (hasDuplicate) {
+          checkDuplicateSlots(); // 警告を再表示
+          return;
+        }
+
+        // 手動指定の日時を収集してscreen2Dataに反映する
+        manualStudents.forEach(s => {
+          const key = `${s.grade}-${s.klass}-${s.number}`;
+          const sel = document.getElementById(`manualSlot-${key}`);
+          if (sel) s.manualSlot = sel.value || '';  // 未選択なら空文字 → 自動に回される
+        });
+
+        // ボタンをローディング状態に
+        const btn = document.getElementById('runScheduleBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-loading"><span class="spinner"></span>実行中...</span>';
+
+        if (typeof google !== 'undefined') {
+          // 本番：GASのrunScheduling()を呼ぶ
+          const payload = JSON.stringify({ students: screen2Data });
+          google.script.run
+            .withSuccessHandler((result) => {
+              btn.disabled = false;
+              btn.innerHTML = '▶ このルールでスケジューリングを実行する';
+              handleScheduleResult(result);
+            })
+            .withFailureHandler((err) => {
+              btn.disabled = false;
+              btn.innerHTML = '▶ このルールでスケジューリングを実行する';
+              showToast('実行に失敗しました: ' + err.message, 'error');
+            })
+            .runScheduling(payload);
+        }
+      });
+
+      // ============================================================
+      //  スケジューリング結果を受け取って表示する
+      //  GASからのレスポンス形式：
+      //  {
+      //    assigned: 284,
+      //    unassigned: 2,
+      //    none: 14,
+      //    siblingResults: [...],
+      //    unassignedStudents: [...],
+      //    studentResults: [        ← 追加：各生徒の割り当てコマ
+      //      { key:'1-1-1', assignedSlot:'2026-04-20_14:30', failed:false }
+      //    ]
+      //  }
+      // ============================================================
+      function handleScheduleResult(resultStr) {
+        let result;
+        try { result = JSON.parse(resultStr); } catch(e) { showToast('結果の読み込みに失敗しました', 'error'); return; }
+        if (result.error) { showToast(result.error, 'error'); return; }
+
+        // ① screen2Dataの_assignedSlotを更新する
+        //    GASで計算した割り当て結果をブラウザ側に反映する
+        //    ※ _keyはGAS側でのみ設定されるため、
+        //      grade-klass-numberの3つで照合する
+        if (result.studentResults && result.studentResults.length > 0) {
+          const resultMap = {};
+          result.studentResults.forEach(r => { resultMap[r.key] = r; });
+          screen2Data.forEach(s => {
+            const key = `${s.grade}-${s.klass}-${s.number}`;
+            const r   = resultMap[key];
+            if (r) {
+              s._key          = key;             // _keyも付与しておく
+              s._assignedSlot = r.assignedSlot || null;
+              s._failed       = r.failed || false;
+            }
+          });
+        }
+
+        // ② 未割り当ての理由をscreen2Dataに保存する
+        if (result.unassignedStudents && result.unassignedStudents.length > 0) {
+          const reasonMap = {};
+          result.unassignedStudents.forEach(u => { reasonMap[u.key] = u.reason; });
+          screen2Data.forEach(s => {
+            const key = `${s.grade}-${s.klass}-${s.number}`;
+            if (reasonMap[key]) s._unassignedReason = reasonMap[key];
+          });
+        }
+
+        // サマリー数値を更新
+        document.getElementById('resultAssigned').textContent   = result.assigned   ?? '-';
+        document.getElementById('resultUnassigned').textContent = result.unassigned ?? '-';
+        document.getElementById('resultNone').textContent       = result.none       ?? '-';
+
+        // 兄弟姉妹調整の結果リストを描画
+        const sibList = document.getElementById('siblingResultList');
+        sibList.innerHTML = '';
+
+        const sibResults = result.siblingResults || [];
+        if (sibResults.length === 0) {
+          sibList.innerHTML = `<div style="font-size:0.8rem; color:var(--text-muted);">兄弟姉妹グループはありませんでした。</div>`;
+        } else {
+          // 成功件数・失敗件数をまとめて表示
+          const successCount = sibResults.filter(r => r.success).length;
+          const failCount    = sibResults.filter(r => !r.success).length;
+
+          if (successCount > 0) {
+            const div = document.createElement('div');
+            div.style.cssText = `
+              display: flex; gap: 10px; align-items: center; padding: 10px 12px;
+              background: #f0fdf4; border-radius: 8px; border: 1px solid #86efac;
+              font-size: 0.8rem; color: var(--success);
+            `;
+            div.innerHTML = `<span style="font-size:1rem;">✓</span> ${successCount}グループ 調整成功`;
+            sibList.appendChild(div);
+          }
+
+          // 失敗したグループを1件ずつ表示
+          sibResults.filter(r => !r.success).forEach(r => {
+            const div = document.createElement('div');
+            div.style.cssText = `
+              display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+              background: var(--warning-light); border-radius: 8px; border: 1px solid #fcd34d;
+              font-size: 0.8rem;
+            `;
+            const membersText = (r.members || []).map(m => esc(m)).join(' ／ ');
+            div.innerHTML = `
+              <span style="color:var(--warning); font-size:1rem; flex-shrink:0;">!</span>
+              <div>
+                <div style="color:var(--warning); font-weight:600;">${esc(r.reason || '共通コマなし')} → 未割り当てへ</div>
+                <div style="color:var(--text-muted); margin-top:2px;">${membersText}</div>
+              </div>
+            `;
+            sibList.appendChild(div);
+          });
+        }
+
+        // 未割り当てリストを描画
+        const unassigned = result.unassignedStudents || [];
+        const unassignedSection = document.getElementById('unassignedSection');
+        if (unassigned.length > 0) {
+          unassignedSection.style.display = 'block';
+          const ul = document.getElementById('unassignedList');
+          ul.innerHTML = '';
+          unassigned.forEach(u => {
+            const [g, k, n] = u.key.split('-');     // '1-1-8' → ['1','1','8']
+            const label = `${g}年${k}組${n}番`;     // → '1年1組8番'
+            const div = document.createElement('div');
+            div.style.cssText = `
+              display: flex; gap: 10px; align-items: center; padding: 8px 12px;
+              background: var(--bg); border-radius: 8px; border: 1px solid var(--border);
+              font-size: 0.8rem;
+            `;
+            div.innerHTML = `
+              <span style="color:var(--text-muted); min-width:80px;">${esc(label)}</span>
+              <span style="font-weight:600; flex:1;">${esc(u.name)}</span>
+              <span style="color:var(--warning);">${esc(u.reason || '')}</span>
+            `;
+            ul.appendChild(div);
+          });
+        } else {
+          unassignedSection.style.display = 'none';
+        }
+
+        // 結果カードを表示してスクロール
+        const resultCard = document.getElementById('scheduleResultCard');
+        resultCard.style.display = 'block';
+        resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        showToast('スケジューリングが完了しました！', 'success');
+      }
+
+      // 画面2に戻るボタン
+      // screen2Dataはメモリに残っているので画面2の状態がそのまま復元される
+      document.getElementById('backToScreen2Btn').addEventListener('click', () => {
+        document.getElementById('screen3').style.display = 'none';
+        document.getElementById('screen2').style.display = 'block';
+      });
+
+      // ステップ4へ進む
+      document.getElementById('goToScreen4Btn').addEventListener('click', () => {
+        showScreen4();
+      });
+
+      // ============================================================
+      //  画面4：結果確認・修正・出力
+      // ============================================================
+
+      // 画面4の状態
+      let s4State = {
+        currentClass:  null,    // 現在表示中のクラスキー（例:'1-1'）
+        editMode:      false,   // 編集モードON/OFF
+        movingStudent: null,    // 移動モード中の生徒key
+        scheduleData:  {},      // クラスキー → { slots: {slotKey: studentKey|null}, students: [...] }
+      };
+
+      function showScreen4() {
+        document.getElementById('screen3').style.display = 'none';
+        document.getElementById('screen4').style.display = 'block';
+        // 画面トップから表示されるようにスクロール
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        initScreen4();
+      }
+
+      function initScreen4() {
+        const s1 = window._screen1Settings;
+        if (!s1) { showToast('画面1の設定が見つかりません', 'error'); return; }
+
+        // screen2Dataからクラス一覧を取得
+        const classKeys = [...new Set(
+          screen2Data.map(s => `${s.grade}-${s.klass}`)
+        )].sort();
+
+        // scheduleDataを構築（screen2Dataの_assignedSlotから）
+        s4State.scheduleData = {};
+        const allSlots = buildSlotsFromS1(s1);
+
+        classKeys.forEach(ck => {
+          const [grade, klass] = ck.split('-');
+          const classStudents  = screen2Data.filter(s => s.grade === grade && s.klass === klass);
+
+          // このクラスのslotMap初期化
+          const slots = {};
+          allSlots.forEach(sl => { slots[sl.key] = null; });
+
+          // 割り当て済みの生徒をslotMapに反映
+          classStudents.forEach(s => {
+            const key = `${s.grade}-${s.klass}-${s.number}`;
+            if (!s._key) s._key = key; // _keyが未設定なら付与
+            if (s._assignedSlot && slots.hasOwnProperty(s._assignedSlot)) {
+              slots[s._assignedSlot] = key;
+            }
+          });
+
+          s4State.scheduleData[ck] = { slots, students: classStudents };
+        });
+
+        // ============================================
+        // クラス選択タブを生成
+        // 画面2が「1クラス指定」なら1つだけ表示
+        // ============================================
+        const s2Settings = window._lastS2Settings || {};
+        const isSingleClass = s2Settings.targetGrade && s2Settings.targetClass;
+
+        const tabList = document.getElementById('classTabList');
+        tabList.innerHTML = '';
+
+        if (isSingleClass) {
+          // 1クラスのみ
+          document.getElementById('classTabCard').style.display = 'none';
+        } else {
+          document.getElementById('classTabCard').style.display = 'block';
+          classKeys.forEach(ck => {
+            const [g, k] = ck.split('-');
+            const btn = document.createElement('button');
+            btn.textContent = `${g}年${k}組`;
+            btn.dataset.classKey = ck;
+            btn.style.cssText = `
+              padding: 6px 14px; font-size: 0.8rem; border-radius: 20px; cursor: pointer;
+              border: 1px solid var(--border); background: var(--white); color: var(--text);
+              transition: all 0.15s;
+            `;
+            btn.addEventListener('click', () => switchClass(ck));
+            tabList.appendChild(btn);
+          });
+        }
+
+        // 出力ボタンエリアを設定（対象範囲に連動）
+        const outputArea = document.getElementById('outputBtnArea');
+        if (isSingleClass) {
+          outputArea.innerHTML = `
+            <button class="btn btn-primary" id="outputSingleBtn" style="background:#185FA5;">
+              このクラスの面談日程表をGoogleシートに出力する
+            </button>`;
+          document.getElementById('outputSingleBtn').addEventListener('click', () => outputClass(s4State.currentClass));
+        } else {
+          outputArea.innerHTML = `
+            <div id="editModeWarning" style="display:none; margin-bottom:8px; padding:8px 12px;
+              background:#fef2f2; border:1px solid #fca5a5; border-radius:8px;
+              font-size:0.8rem; color:#991b1b;">
+              ✏️ 編集モード中のクラスがあります。編集を完了してから出力してください。
+            </div>
+            <button class="btn btn-primary" id="outputAllBtn" style="background:#185FA5; margin-bottom:8px;">
+              全クラスの面談日程表をGoogleシートに出力する
+            </button>
+            <button class="btn btn-secondary" id="outputSingleBtn2" style="font-size:0.85rem;">
+              このクラスのみ出力する
+            </button>`;
+          document.getElementById('outputAllBtn').addEventListener('click', () => {
+            if (s4State.editMode) {
+              document.getElementById('editModeWarning').style.display = 'block';
+              return;
+            }
+            outputAllClasses();
+          });
+          document.getElementById('outputSingleBtn2').addEventListener('click', () => outputClass(s4State.currentClass));
+        }
+
+        // 最初のクラスを表示
+        const firstClass = classKeys[0];
+        if (firstClass) switchClass(firstClass);
+      }
+
+      // クラスを切り替えて表示
+      function switchClass(classKey) {
+        // 編集モードをリセット
+        s4State.editMode      = false;
+        s4State.movingStudent = null;
+        updateEditModeUI();
+
+        s4State.currentClass = classKey;
+
+        // タブのアクティブ状態を更新
+        document.querySelectorAll('#classTabList button').forEach(btn => {
+          const isActive = btn.dataset.classKey === classKey;
+          btn.style.background   = isActive ? 'var(--primary)' : 'var(--white)';
+          btn.style.color        = isActive ? 'var(--white)'   : 'var(--text)';
+          btn.style.borderColor  = isActive ? 'var(--primary)' : 'var(--border)';
+        });
+
+        renderCalendarGrid(classKey);
+        renderUnassignedSection(classKey);
+      }
+
+      // ============================================================
+      //  カレンダーグリッドを描画する
+      // ============================================================
+      function renderCalendarGrid(classKey) {
+        const s1   = window._screen1Settings;
+        const data = s4State.scheduleData[classKey];
+        if (!data) return;
+
+        const [grade, klass] = classKey.split('-');
+
+        // タイトル・統計を更新
+        document.getElementById('calendarTitle').textContent = `${grade}年${klass}組　面談スケジュール`;
+        const assigned = data.students.filter(s => s._assignedSlot).length;
+        const total    = data.students.filter(s => s.treatment !== 'none').length;
+        document.getElementById('calendarStats').textContent = `${total}名中 ${assigned}名割り当て済み`;
+
+        const allSlots = buildSlotsFromS1(s1);
+        const dates    = s1.dates.map(d => d.date);
+
+        // ヘッダー行を生成
+        const thead = document.getElementById('calendarHead');
+        thead.innerHTML = '';
+        const headRow = document.createElement('tr');
+        const thTime  = document.createElement('th');
+        thTime.style.cssText = 'padding:5px 4px;font-size:0.75rem;color:var(--text-muted);min-width:44px;';
+        headRow.appendChild(thTime);
+        dates.forEach(date => {
+          const th = document.createElement('th');
+          th.style.cssText = 'padding:5px 6px;font-size:0.75rem;color:var(--text-muted);font-weight:600;text-align:center;white-space:nowrap;';
+          th.textContent   = formatJapanese(date).replace('（', '\n（');
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+
+        // ボディ行を生成（時刻ごと）
+        const tbody    = document.getElementById('calendarBody');
+        tbody.innerHTML = '';
+        const duration = s1.slotDuration || 15;
+
+        // 時刻の一覧を取得（重複なし）
+        const times = [...new Set(allSlots.map(sl => sl.slot))].sort();
+
+        times.forEach(time => {
+          const tr = document.createElement('tr');
+
+          // 時刻列
+          const tdTime = document.createElement('td');
+          tdTime.style.cssText = 'padding:2px 4px;font-size:0.72rem;color:var(--text-muted);text-align:right;white-space:nowrap;background:var(--bg);border:0.5px solid var(--border);';
+          tdTime.textContent   = time;
+          tr.appendChild(tdTime);
+
+          dates.forEach(date => {
+            const slotKey    = `${date}_${time}`;
+            const studentKey = data.slots[slotKey];
+            const td         = document.createElement('td');
+            td.dataset.slotKey = slotKey;
+            td.style.cssText   = 'padding:2px 3px;border:0.5px solid var(--border);height:32px;vertical-align:middle;min-width:80px;';
+
+            if (studentKey) {
+              // 予約済みコマ
+              const student = data.students.find(s => s._key === studentKey);
+              const name    = student ? `${student.number}番 ${student.lastName}${student.firstName}` : studentKey;
+
+              // 移動モード中で選択中の生徒なら青くする
+              const isMoving = s4State.movingStudent === studentKey;
+              td.style.background = isMoving ? '#bfdbfe' : '#dcfce7';
+              td.style.border     = isMoving ? '2px solid var(--primary)' : '0.5px solid #86efac';
+              td.style.borderRadius = '3px';
+              td.style.cursor     = s4State.editMode ? 'pointer' : 'default';
+              td.innerHTML = `<div style="font-size:0.72rem;font-weight:600;color:#166534;line-height:1.2;padding:1px 2px;text-align:center;">${esc(name)}</div>`;
+
+              if (s4State.editMode) {
+                td.addEventListener('click', () => handleBookedCellClick(classKey, slotKey, studentKey));
+              }
+            } else if (data.slots.hasOwnProperty(slotKey)) {
+              // 空きコマ
+              const isMoveTarget = s4State.movingStudent !== null &&
+                isAvailableForStudent(classKey, slotKey, s4State.movingStudent);
+
+              if (isMoveTarget) {
+                // 移動可能コマ（薄い青）
+                td.style.background = '#dbeafe';
+                td.style.border     = '0.5px solid #93c5fd';
+                td.style.cursor     = 'pointer';
+                td.addEventListener('click', () => moveStudentToSlot(classKey, slotKey));
+              } else {
+                td.style.background = 'var(--white)';
+                td.style.cursor     = 'default';
+              }
+
+              // 未割り当ての生徒が移動モード外の時でも空きコマに手動配置できる
+              if (!s4State.movingStudent && s4State.editMode) {
+                td.style.cursor = 'pointer';
+                td.addEventListener('click', () => handleEmptyCellClick(classKey, slotKey));
+              }
+            } else {
+              // このクラスのスケジュール外のコマ（存在しないはずだが念のため）
+              td.style.background = '#f1f5f9';
+            }
+
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      }
+
+      // 予約済みコマをクリックした時の処理
+      function handleBookedCellClick(classKey, slotKey, studentKey) {
+        if (s4State.movingStudent === studentKey) {
+          // 同じ生徒をもう一度クリック → 移動モード解除
+          s4State.movingStudent = null;
+          document.getElementById('moveHint').style.display = 'none';
+          document.getElementById('editHint').style.display = 'block';
+        } else {
+          // 別の生徒をクリック → その生徒の移動モードに切り替え
+          s4State.movingStudent = studentKey;
+          document.getElementById('moveHint').style.display = 'flex';
+          document.getElementById('editHint').style.display = 'none';
+        }
+        renderCalendarGrid(classKey);
+      }
+
+      // 空きコマをクリックした時の処理（未割り当て生徒の配置）
+      function handleEmptyCellClick(classKey, slotKey) {
+        // 未割り当てリストで選択中の生徒がいれば配置
+        if (s4State.pendingUnassigned) {
+          moveStudentToSlot(classKey, slotKey, s4State.pendingUnassigned);
+          s4State.pendingUnassigned = null;
+          renderUnassignedSection(classKey);
+        }
+      }
+
+      // 生徒を別のコマに移動する
+      function moveStudentToSlot(classKey, newSlotKey, overrideStudentKey) {
+        const studentKey = overrideStudentKey || s4State.movingStudent;
+        if (!studentKey) return;
+
+        const data = s4State.scheduleData[classKey];
+
+        // 元のコマを空に
+        Object.keys(data.slots).forEach(k => {
+          if (data.slots[k] === studentKey) data.slots[k] = null;
+        });
+
+        // 新しいコマに配置
+        data.slots[newSlotKey] = studentKey;
+
+        // screen2Dataも更新
+        const student = data.students.find(s =>
+          (s._key || `${s.grade}-${s.klass}-${s.number}`) === studentKey
+        );
+        if (student) student._assignedSlot = newSlotKey;
+
+        // 移動モード解除
+        s4State.movingStudent = null;
+        document.getElementById('moveHint').style.display   = 'none';
+        document.getElementById('editHint').style.display   = 'block';
+
+        renderCalendarGrid(classKey);
+        renderUnassignedSection(classKey);
+
+        // 統計も更新
+        const assigned = data.students.filter(s => s._assignedSlot).length;
+        const total    = data.students.filter(s => s.treatment !== 'none').length;
+        document.getElementById('calendarStats').textContent = `${total}名中 ${assigned}名割り当て済み`;
+
+        showToast('移動しました', 'success');
+      }
+
+      // その生徒がそのコマに移動可能か判定
+      // 条件：コマが空き AND その生徒のNGでない
+      function isAvailableForStudent(classKey, slotKey, studentKey) {
+        const data    = s4State.scheduleData[classKey];
+        const student = data.students.find(s =>
+          (s._key || `${s.grade}-${s.klass}-${s.number}`) === studentKey
+        );
+        if (!student) return false;
+        if (data.slots[slotKey] !== null) return false;
+
+        // _ngSetがない場合はbadTimesから再構築する
+        if (!student._ngSet) {
+          student._ngSet = new Set();
+          (student.badTimes || []).forEach(bt => {
+            // bt.date（'2026-06-15'形式）とbt.times（['15:30〜15:45',...]形式）
+            const dateStr = bt.date || '';
+            (bt.times || []).forEach(t => {
+              const startTime = t.split('〜')[0].trim();
+              student._ngSet.add(`${dateStr}_${startTime}`);
+            });
+          });
+        }
+        return !student._ngSet.has(slotKey);
+      }
+
+      // 編集モードのUI更新
+      function updateEditModeUI() {
+        const btn = document.getElementById('editModeBtn');
+        if (s4State.editMode) {
+          btn.textContent        = '✅ 編集完了';
+          btn.style.background   = '#f0fdf4';
+          btn.style.borderColor  = '#86efac';
+          btn.style.color        = 'var(--success)';
+          document.getElementById('editHint').style.display = 'block';
+        } else {
+          btn.textContent        = '✏️ 編集モード';
+        const w = document.getElementById('editModeWarning');
+        if (w) w.style.display = 'none';
+          btn.style.background   = 'var(--white)';
+          btn.style.borderColor  = 'var(--border)';
+          btn.style.color        = 'var(--text)';
+          document.getElementById('editHint').style.display = 'none';
+          document.getElementById('moveHint').style.display = 'none';
+        }
+      }
+
+      // 編集モードボタン
+      document.getElementById('editModeBtn').addEventListener('click', () => {
+        s4State.editMode      = !s4State.editMode;
+        s4State.movingStudent = null;
+        updateEditModeUI();
+        renderCalendarGrid(s4State.currentClass);
+      });
+
+      // 移動キャンセルボタン
+      document.getElementById('cancelMoveBtn').addEventListener('click', () => {
+        s4State.movingStudent = null;
+        document.getElementById('moveHint').style.display = 'none';
+        document.getElementById('editHint').style.display = 'block';
+        renderCalendarGrid(s4State.currentClass);
+      });
+
+      // 画面3に戻るボタン
+      document.getElementById('backToScreen3Btn').addEventListener('click', () => {
+        document.getElementById('screen4').style.display = 'none';
+        document.getElementById('screen3').style.display = 'block';
+      });
+
+      // ============================================================
+      //  未割り当て・面談なしセクションを描画
+      // ============================================================
+      function renderUnassignedSection(classKey) {
+        const data = s4State.scheduleData[classKey];
+        if (!data) return;
+
+        const unassigned = data.students.filter(s =>
+          s.treatment !== 'none' && !s._assignedSlot
+        );
+        const noneStudents = data.students.filter(s => s.treatment === 'none');
+
+        const card = document.getElementById('unassignedCard');
+        card.style.display = (unassigned.length > 0 || noneStudents.length > 0) ? 'block' : 'none';
+
+        // 未割り当てリスト
+        // _assignedSlotがある人は「配置済み」として記録を残す
+        const uSection = document.getElementById('s4UnassignedSection');
+        const uList    = document.getElementById('s4UnassignedList');
+
+        // 元々未割り当てだった人（_unassignedReasonがある人）を全員取得
+        const originalUnassigned = data.students.filter(s =>
+          s._unassignedReason && s.treatment !== 'none'
+        );
+
+        if (originalUnassigned.length > 0) {
+          uSection.style.display = 'block';
+          uList.innerHTML = '';
+          originalUnassigned.forEach(s => {
+            const studentKey = s._key || `${s.grade}-${s.klass}-${s.number}`;
+            const reasonMap = {
+              '兄弟姉妹調整失敗': '兄弟姉妹調整で共通コマが見つかりませんでした',
+              '全コマNG':     '全ての時間帯が都合の悪い時間として登録されています',
+              '空きコマなし': '割り当て可能な空きコマがありませんでした',
+            };
+            const reasonText = reasonMap[s._unassignedReason] || s._unassignedReason || '原因不明';
+            const isPlaced   = !!s._assignedSlot; // 手動配置済みかどうか
+
+            // 配置済みの場合は日時を表示
+            let placedText = '';
+            if (isPlaced) {
+              const [date, time] = s._assignedSlot.split('_');
+              placedText = `${formatJapanese(date)} ${time} に手動配置済み`;
+            }
+
+            const div = document.createElement('div');
+            div.style.cssText = `
+              display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+              border: 1px solid ${isPlaced ? '#86efac' : '#fcd34d'};
+              border-radius: 8px;
+              background: ${isPlaced ? '#f0fdf4' : 'var(--warning-light)'};
+              font-size: 0.8rem; flex-wrap: wrap;
+            `;
+            div.innerHTML = `
+              <span style="color:var(--text-muted);min-width:60px;">${esc(s.number)}番</span>
+              <span style="font-weight:600;flex:1;">${esc(s.lastName)} ${esc(s.firstName)}</span>
+              ${isPlaced
+                ? `<span style="color:var(--success);font-size:0.75rem;">✅ ${esc(placedText)}</span>`
+                : `<span style="color:var(--warning);font-size:0.75rem;">${esc(reasonText)}</span>
+                  <button onclick="startPlaceUnassigned('${esc(studentKey)}')"
+                    style="font-size:0.75rem;padding:3px 10px;border:1px solid var(--primary);
+                            border-radius:4px;background:var(--white);color:var(--primary);cursor:pointer;
+                            white-space:nowrap;">
+                    空きコマに配置
+                  </button>`
+              }
+            `;
+            uList.appendChild(div);
+          });
+        } else {
+          uSection.style.display = 'none';
+        }
+
+        // 面談なしリスト
+        const nSection = document.getElementById('s4NoneSection');
+        const nList    = document.getElementById('s4NoneList');
+        if (noneStudents.length > 0) {
+          nSection.style.display = 'block';
+          nList.textContent = noneStudents.map(s =>
+            `${s.number}番 ${s.lastName}${s.firstName}`
+          ).join('　／　');
+        } else {
+          nSection.style.display = 'none';
+        }
+      }
+
+      // 未割り当ての生徒を「空きコマに配置」ボタンで選択する
+      function startPlaceUnassigned(studentKey) {
+        if (!s4State.editMode) {
+          showToast('「✏️ 編集モード」をONにしてから操作してください', 'error');
+          return;
+        }
+        s4State.movingStudent     = studentKey;
+        s4State.pendingUnassigned = studentKey;
+        document.getElementById('moveHint').style.display = 'flex';
+        document.getElementById('editHint').style.display = 'none';
+        renderCalendarGrid(s4State.currentClass);
+        // グリッドまでスクロール
+        setTimeout(() => {
+          document.getElementById('calendarCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      }
+
+      // ============================================================
+      //  s1の設定から全スロット一覧を生成（フロント版）
+      // ============================================================
+      function buildSlotsFromS1(s1) {
+        const slots    = [];
+        const duration = s1.slotDuration || 15;
+        s1.dates.forEach(d => {
+          let m = timeStrToMin(d.start);
+          const endMin = timeStrToMin(d.end);
+          while (m < endMin) {
+            const slotStart = minToTimeStr(m);
+            slots.push({ date: d.date, slot: slotStart, key: `${d.date}_${slotStart}` });
+            m += duration;
+          }
+        });
+        return slots;
+      }
+
+      // ============================================================
+      //  出力処理（GAS呼び出し）
+      // ============================================================
+      function outputClass(classKey) {
+        if (!classKey) { showToast('クラスが選択されていません', 'error'); return; }
+
+        // 押されたボタンを特定してローディング状態にする
+        // ボタン生成側
+        document.getElementById('outputSingleBtn').addEventListener('click', (e) => {
+          outputClass(s4State.currentClass, e.currentTarget);
+        });
+
+        document.getElementById('outputSingleBtn2').addEventListener('click', (e) => {
+          outputClass(s4State.currentClass, e.currentTarget);
+        });
+
+        // 関数側
+        function outputClass(classKey, triggerBtn) {
+          if (!classKey) { showToast('クラスが選択されていません', 'error'); return; }
+
+          const btn = triggerBtn || null;
+          const originalText = btn ? btn.innerHTML : '';
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="btn-loading"><span class="spinner"></span>出力中...</span>';
+          }
+
+          const done = () => {
+            if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+          };
+
+          if (typeof google !== 'undefined') {
+            const data = s4State.scheduleData[classKey];
+            google.script.run
+              .withSuccessHandler(() => { done(); showToast('出力しました！', 'success'); })
+              .withFailureHandler(err => { done(); showToast('出力に失敗しました: ' + err.message, 'error'); })
+              .outputClassSheet(JSON.stringify({ classKey, students: data.students }));
+          }
+        }
+
+        const done = () => {
+          if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+        };
+
+        if (typeof google !== 'undefined') {
+          const data = s4State.scheduleData[classKey];
+          google.script.run
+            .withSuccessHandler(() => { done(); showToast('出力しました！', 'success'); })
+            .withFailureHandler(err => { done(); showToast('出力に失敗しました: ' + err.message, 'error'); })
+            .outputClassSheet(JSON.stringify({ classKey, students: data.students }));
+        }
+      }
+
+      function outputClass(classKey, triggerBtn) {
+        if (!classKey) { showToast('クラスが選択されていません', 'error'); return; }
+
+        const btn = triggerBtn || null;
+        const originalText = btn ? btn.innerHTML : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span class="btn-loading"><span class="spinner"></span>出力中...</span>';
+        }
+
+        const done = () => {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        };
+
+        if (typeof google !== 'undefined') {
+          const data = s4State.scheduleData[classKey];
+          if (!data || !Array.isArray(data.students)) {
+            done();
+            showToast('出力データが見つかりません', 'error');
+            return;
+          }
+
+          google.script.run
+            .withSuccessHandler(() => { done(); showToast('出力しました！', 'success'); })
+            .withFailureHandler((err) => {
+              done();
+              const msg = (err && err.message) ? err.message : String(err || '不明なエラー');
+              showToast('出力に失敗しました: ' + msg, 'error');
+            })
+            .outputClassSheet(JSON.stringify({ classKey, students: data.students }));
+        } else {
+          done();
+          showToast('ローカル環境では出力できません', 'error');
+        }
+      }
+
+      function outputAllClasses() {
+        const btn = document.getElementById('outputAllBtn');
+        const originalText = btn ? btn.innerHTML : '';
+
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span class="btn-loading"><span class="spinner"></span>出力中...</span>';
+        }
+
+        const done = () => {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        };
+
+        if (typeof google !== 'undefined') {
+          const allData = {};
+          Object.keys(s4State.scheduleData || {}).forEach(ck => {
+            const students = s4State.scheduleData[ck]?.students || [];
+            allData[ck] = students;
+          });
+
+          google.script.run
+            .withSuccessHandler(() => { done(); showCompleteOutputPopup(); })
+            .withFailureHandler((err) => {
+              done();
+              const msg = (err && err.message) ? err.message : String(err || '不明なエラー');
+              showToast('出力に失敗しました: ' + msg, 'error');
+            })
+            .outputAllClassSheets(JSON.stringify(allData));
+        } else {
+          done();
+          showCompleteOutputPopup();
+        }
+      }
+    </script>
+  </body>
+</html>
